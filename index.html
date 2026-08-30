@@ -311,6 +311,7 @@ if ('serviceWorker' in navigator) {
     <i class="ti ti-music"></i> Calendario Lezioni di Canto
     <div class="toolbar">
       <span class="sync-status" id="sync-status"></span>
+      <button onclick="pullFromServerIfNewer()" title="Controlla aggiornamenti dal server" style="padding:4px 6px;"><i class="ti ti-refresh"></i></button>
       <span class="unsaved-dot visible" id="unsaved-dot" title="Modifiche non ancora sincronizzate"></span>
       <button id="install-btn" onclick="installPWA()" style="display:none"><i class="ti ti-device-mobile"></i> Installa</button>
       <button onclick="document.getElementById('import-input').click()"><i class="ti ti-upload"></i> Importa</button>
@@ -786,10 +787,24 @@ function flushPushBeacon() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushPushBeacon();
+  else pullFromServerIfNewer(); // torni sull'app: ricontrolla subito il server
 });
 window.addEventListener('pagehide', flushPushBeacon);
+window.addEventListener('focus', () => pullFromServerIfNewer());
+window.addEventListener('online', () => pullFromServerIfNewer());
+
+// Ricontrolla anche periodicamente mentre l'app resta aperta e visibile,
+// così più dispositivi aperti insieme restano allineati senza bisogno di
+// chiudere e riaprire nulla.
+setInterval(() => {
+  if (document.visibilityState === 'visible') pullFromServerIfNewer();
+}, 25000);
 
 async function pullFromServerIfNewer() {
+  // Non sovrascrivere modifiche locali non ancora inviate, né interrompere
+  // l'utente mentre sta modificando qualcosa in un modale.
+  if (syncTimer) return;
+  if (document.querySelector('.modal-overlay.open')) return;
   try {
     setSyncStatus('syncing');
     const res = await fetch(SYNC_LOAD_URL);

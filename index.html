@@ -793,20 +793,31 @@ function flushPushBeacon() {
     navigator.sendBeacon(SYNC_SAVE_URL, blob);
   } catch (e) { /* best effort */ }
 }
+// "Risveglio" della pagina dopo che è stata in background: su mobile, dopo
+// una sospensione lunga, un solo tentativo può fallire perché la rete non è
+// ancora pronta — riproviamo automaticamente una seconda volta poco dopo.
+function pullOnResume() {
+  pullFromServerIfNewer();
+  setTimeout(pullFromServerIfNewer, 3000);
+}
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushPushBeacon();
-  else pullFromServerIfNewer(); // torni sull'app: ricontrolla subito il server
+  else pullOnResume(); // torni sull'app: ricontrolla subito il server
 });
 window.addEventListener('pagehide', flushPushBeacon);
-window.addEventListener('focus', () => pullFromServerIfNewer());
-window.addEventListener('online', () => pullFromServerIfNewer());
+window.addEventListener('pageshow', pullOnResume); // ripristino da bfcache su mobile
+window.addEventListener('focus', pullOnResume);
+window.addEventListener('online', pullOnResume);
 
 // Ricontrolla anche periodicamente mentre l'app resta aperta e visibile,
 // così più dispositivi aperti insieme restano allineati senza bisogno di
-// chiudere e riaprire nulla.
+// chiudere e riaprire nulla. (Su un dispositivo mobile in background questo
+// intervallo viene comunque messo in pausa dal sistema operativo: è un
+// limite della piattaforma, non risolvibile lato codice — per questo
+// contiamo anche sugli eventi di "risveglio" qui sopra.)
 setInterval(() => {
   if (document.visibilityState === 'visible') pullFromServerIfNewer();
-}, 25000);
+}, 15000);
 
 async function pullFromServerIfNewer() {
   // Non sovrascrivere modifiche locali non ancora inviate (o in corso di

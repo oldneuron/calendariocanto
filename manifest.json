@@ -1,0 +1,24 @@
+{
+  "name": "Calendario Lezioni di Canto",
+  "short_name": "Lezioni Canto",
+  "description": "Gestione lezioni di canto ricorrenti",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#4A1B0C",
+  "theme_color": "#4A1B0C",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

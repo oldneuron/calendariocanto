@@ -1,0 +1,9 @@
+{
+  "name": "calendario-lezioni-canto",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PWA per la gestione delle lezioni di un corso di canto, con sincronizzazione automatica via Netlify Blobs.",
+  "dependencies": {
+    "@netlify/blobs": "^11.0.0"
+  }
+}

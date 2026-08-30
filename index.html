@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendario Lezioni di Canto</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+
+<!-- PWA -->
+<meta name="theme-color" content="#4A1B0C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lezioni Canto">
+<link rel="apple-touch-icon" id="apple-touch-icon">
+<link rel="manifest" href="./manifest.json">
+
+<script>
+// Inline SVG icon as data URL (music note on dark background)
+const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#4A1B0C"/>
+  <text x="256" y="360" font-size="300" text-anchor="middle" fill="#FAECE7" font-family="serif">&#9834;</text>
+</svg>`;
+const iconUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(iconSvg)));
+
+// Set apple touch icon
+document.getElementById('apple-touch-icon').href = iconUrl;
+
+// Register external service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('SW registrato'))
+      .catch(e => console.warn('SW:', e));
+  });
+}
+</script>
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f5f5f4;
+    --color-background-tertiary: #eeede9;
+    --color-text-primary: #1a1a18;
+    --color-text-secondary: #6b6b68;
+    --color-text-tertiary: #9a9a96;
+    --color-text-danger: #a32d2d;
+    --color-border-tertiary: rgba(0,0,0,0.12);
+    --color-border-secondary: rgba(0,0,0,0.22);
+    --color-border-danger: #e24b4a;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1e1e1c;
+      --color-background-secondary: #2a2a28;
+      --color-background-tertiary: #232321;
+      --color-text-primary: #f0ede6;
+      --color-text-secondary: #a8a8a4;
+      --color-text-tertiary: #6b6b68;
+      --color-text-danger: #f09595;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+      --color-border-secondary: rgba(255,255,255,0.2);
+      --color-border-danger: #e24b4a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    padding: 1.5rem;
+  }
+  .container { max-width: 780px; margin: 0 auto; }
+  .app-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-title i { font-size: 22px; color: #D85A30; }
+
+  .year-switcher { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
+  .year-switcher .year-label { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--color-text-secondary); background: var(--color-background-secondary); padding: 4px 16px; border-radius: 20px; }
+  .year-switcher button { width: 26px; height: 26px; border-radius: 50%; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--color-text-secondary); font-size: 12px; transition: background 0.15s; }
+  .year-switcher button:hover { background: var(--color-background-secondary); }
+
+  .cal-header { display: flex; align-items: center; justify-content: space-between; padding: 0 0 0.75rem; }
+  .cal-title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+  .cal-nav { display: flex; gap: 6px; }
+  .cal-nav button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    width: 32px; height: 32px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+  .cal-nav button:hover { background: var(--color-background-secondary); }
+  .cal-nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .cal-nav button:disabled:hover { background: var(--color-background-primary); }
+  .today-btn { width: auto !important; padding: 0 12px !important; font-size: 13px !important; font-family: var(--font-sans); }
+
+  .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
+  .weekday { text-align: center; font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); padding: 4px 0; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .day-cell {
+    min-height: 72px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-tertiary);
+    padding: 4px;
+    background: var(--color-background-primary);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .day-cell:hover { border-color: var(--color-border-secondary); }
+  .day-cell.other-month { background: var(--color-background-tertiary); opacity: 0.5; }
+  .day-cell.today .day-num {
+    background: #4A1B0C; color: #FAECE7;
+    border-radius: 50%; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .day-num {
+    font-size: 12px; font-weight: 500; color: var(--color-text-secondary);
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 2px;
+  }
+  .lesson-pill {
+    border-radius: 4px; padding: 2px 5px;
+    font-size: 11px; font-weight: 500; margin-bottom: 2px;
+    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 3px;
+    font-family: var(--font-sans);
+  }
+  .lesson-pill:hover { opacity: 0.85; }
+
+  .sidebar { margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 500px) { .sidebar { grid-template-columns: 1fr; } }
+  .sidebar-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 1rem 1.25rem;
+  }
+  .sidebar-card h3 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+  .student-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); cursor: pointer; }
+  .student-item:last-child { border-bottom: none; }
+  .student-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+  .student-info { flex: 1; min-width: 0; }
+  .student-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .student-time { font-size: 11px; color: var(--color-text-tertiary); }
+  .student-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  .add-btn {
+    width: 100%; margin-top: 10px; padding: 8px;
+    border: 0.5px dashed var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    background: none; cursor: pointer;
+    font-size: 13px; color: var(--color-text-tertiary);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-family: var(--font-sans);
+    transition: background 0.15s;
+  }
+  .add-btn:hover { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--color-background-primary);
+    border-radius: var(--border-radius-lg);
+    border: 0.5px solid var(--color-border-secondary);
+    padding: 1.5rem; width: 320px; max-width: 95vw;
+  }
+  .modal h3 { font-size: 16px; font-weight: 500; margin-bottom: 1rem; color: var(--color-text-primary); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; }
+  .field input, .field select {
+    width: 100%; font-size: 14px; font-family: var(--font-sans);
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 10px; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: #D85A30; box-shadow: 0 0 0 2px rgba(216,90,48,0.15); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 1rem; justify-content: flex-end; flex-wrap: wrap; }
+  .btn-primary {
+    background: #4A1B0C; color: #FAECE7;
+    border: none; border-radius: var(--border-radius-md);
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    cursor: pointer; font-family: var(--font-sans);
+  }
+  .btn-primary:hover { background: #3C1509; }
+  .btn-cancel {
+    background: none; border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md); padding: 8px 16px;
+    font-size: 13px; cursor: pointer; color: var(--color-text-secondary);
+    font-family: var(--font-sans);
+  }
+  .btn-danger {
+    background: none; border: 0.5px solid var(--color-border-danger);
+    border-radius: var(--border-radius-md); padding: 8px 16px;
+    font-size: 13px; cursor: pointer; color: var(--color-text-danger);
+    margin-right: auto; font-family: var(--font-sans);
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .upcoming-item { padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 8px; }
+  .upcoming-item:last-child { border-bottom: none; }
+  .upcoming-date { font-size: 11px; color: var(--color-text-tertiary); min-width: 55px; }
+  .upcoming-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .upcoming-hour { font-size: 11px; color: var(--color-text-tertiary); }
+  .end-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+  .end-toggle button {
+    flex: 1; padding: 6px 4px; font-size: 12px; font-family: var(--font-sans);
+    border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md);
+    background: none; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s;
+  }
+  .end-toggle button.active { background: #4A1B0C; color: #FAECE7; border-color: #4A1B0C; }  .end-badge {
+    font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
+    background: var(--color-background-secondary); color: var(--color-text-tertiary);
+    margin-left: 4px; vertical-align: middle;
+  }
+  .end-badge.active-end { background: #FAECE7; color: #4A1B0C; }
+  .status-toggle { display: flex; gap: 6px; margin-top: 12px; }
+  .status-toggle button {
+    flex: 1; padding: 7px 4px; font-size: 12px; font-family: var(--font-sans);
+    border-radius: var(--border-radius-md); cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: none; color: var(--color-text-secondary);
+  }
+  .status-toggle button.active-cancelled { background: #FEF0F0; color: #a32d2d; border-color: #e24b4a; }
+  .status-toggle button.active-makeup { background: #FFF8E6; color: #7a5000; border-color: #EF9F27; }
+  .makeup-item { padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .makeup-item:hover { opacity: 0.75; }
+  .recovered-badge { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #E7F7EE; color: #0B6B3A; margin-left: 4px; vertical-align: middle; }
+  .link-btn { background: none; border: none; padding: 6px 0 0; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; text-decoration: underline; }
+  .link-btn:hover { color: var(--color-text-primary); }
+  .history-item { padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: flex-start; gap: 8px; }
+  .history-item:last-child { border-bottom: none; }
+  .history-name { font-size: 13px; font-weight: 500; }
+  .history-date { font-size: 12px; color: var(--color-text-secondary); }
+  .history-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .history-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; white-space: nowrap; margin-left: auto; flex-shrink: 0; }
+  .history-badge.badge-cancelled { background: #FEF0F0; color: #a32d2d; }
+  .history-badge.badge-makeup { background: #FFF8E6; color: #7a5000; }
+  .history-badge.badge-recovered { background: #E7F7EE; color: #0B6B3A; }
+  .history-filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .history-filters button { font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--color-border-tertiary); background: var(--color-background-secondary); cursor: pointer; color: var(--color-text-secondary); }
+  .history-filters button.active { background: var(--color-text-primary); color: #fff; border-color: var(--color-text-primary); }
+  #history-list { max-height: 50vh; overflow-y: auto; }
+  .makeup-item:last-child { border-bottom: none; }
+  .makeup-date { font-size: 11px; color: var(--color-text-tertiary); min-width: 55px; }
+  .makeup-name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+  .makeup-icon { font-size: 13px; color: #EF9F27; flex-shrink: 0; }
+  .action-row { display: flex; gap: 6px; margin-top: 10px; }
+  .action-row button {
+    flex: 1; padding: 7px 4px; font-size: 12px; font-family: var(--font-sans);
+    border-radius: var(--border-radius-md); cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: none; color: var(--color-text-secondary);
+  }
+  .action-row button:hover { background: var(--color-background-secondary); }
+  .action-row .btn-move { border-color: #378ADD; color: #042C53; background: #E6F1FB; }
+  .action-row .btn-move:hover { background: #cce4f7; }
+  .action-row .btn-delete-lesson { border-color: var(--color-border-danger); color: var(--color-text-danger); }
+  .action-row .btn-delete-lesson:hover { background: #FEF0F0; }
+  .moved-badge { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #E6F1FB; color: #042C53; margin-left: 4px; vertical-align: middle; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .toolbar button {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px; font-size: 12px; font-family: var(--font-sans);
+    border-radius: var(--border-radius-md); cursor: pointer; transition: all 0.15s;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary); color: var(--color-text-secondary);
+  }
+  .toolbar button:hover { background: var(--color-background-secondary); }
+  .toolbar .btn-export { background: #4A1B0C; color: #FAECE7; border-color: #4A1B0C; }
+  .toolbar .btn-export:hover { background: #3C1509; }
+  .unsaved-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #EF9F27;
+    display: none; flex-shrink: 0;
+    box-shadow: 0 0 0 2px #FFF8E6;
+  }
+  .unsaved-dot.visible { display: inline-block; }
+  .sync-status { font-size: 11px; color: var(--color-text-tertiary); white-space: nowrap; }
+  .sync-status.sync-error, .sync-status.sync-offline { color: var(--color-text-danger); }
+  .sync-status.sync-ok { color: #1D9E75; }
+  #import-input { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="app-title">
+    <i class="ti ti-music"></i> Calendario Lezioni di Canto
+    <div class="toolbar">
+      <span class="sync-status" id="sync-status"></span>
+      <span class="unsaved-dot visible" id="unsaved-dot" title="Modifiche non ancora sincronizzate"></span>
+      <button id="install-btn" onclick="installPWA()" style="display:none"><i class="ti ti-device-mobile"></i> Installa</button>
+      <button onclick="document.getElementById('import-input').click()"><i class="ti ti-upload"></i> Importa</button>
+      <button class="btn-export" onclick="exportFile()"><i class="ti ti-download"></i> Esporta</button>
+    </div>
+  </div>
+  <input type="file" id="import-input" accept=".html" onchange="importFile(event)">
+
+  <div class="year-switcher">
+    <button onclick="changeSchoolYear(-1)" aria-label="Anno scolastico precedente"><i class="ti ti-chevrons-left"></i></button>
+    <div class="year-label" id="year-label">2025/2026</div>
+    <button onclick="changeSchoolYear(1)" aria-label="Anno scolastico successivo"><i class="ti ti-chevrons-right"></i></button>
+  </div>
+
+  <div class="cal-header">
+    <div class="cal-title" id="month-label">Settembre 2025</div>
+    <div class="cal-nav">
+      <button id="prev-month-btn" onclick="changeMonth(-1)" aria-label="Mese precedente"><i class="ti ti-chevron-left"></i></button>
+      <button class="today-btn" onclick="goToday()">Oggi</button>
+      <button id="next-month-btn" onclick="changeMonth(1)" aria-label="Mese successivo"><i class="ti ti-chevron-right"></i></button>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"><div class="legend-item"><div class="legend-dot" style="background:#D85A30"></div><span>Patrizia</span><span class="end-badge active-end">dal 1 apr 2026 · fino al 25 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div><span>Laura</span><span class="end-badge active-end">dal 1 mag 2026 · fino al 18 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div><span>Luisa</span><span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#D4537E"></div><span>Emanuela</span><span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div></div>
+
+  <div class="weekdays">
+    <div class="weekday">Lun</div><div class="weekday">Mar</div><div class="weekday">Mer</div>
+    <div class="weekday">Gio</div><div class="weekday">Ven</div><div class="weekday">Sab</div><div class="weekday">Dom</div>
+  </div>
+  <div class="days-grid" id="days-grid"><div class="day-cell"><div class="day-num">1</div></div><div class="day-cell"><div class="day-num">2</div></div><div class="day-cell"><div class="day-num">3</div></div><div class="day-cell"><div class="day-num">4</div><div class="lesson-pill" style="background: rgb(251, 234, 240); color: rgb(75, 21, 40); border: 0.5px solid rgb(212, 83, 126);"><span>Emanuela 15:00</span></div><div class="lesson-pill" style="background: rgb(230, 241, 251); color: rgb(4, 44, 83); border: 0.5px solid rgb(55, 138, 221);"><span>Luisa 15:45</span></div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell today"><div class="day-num">5</div></div><div class="day-cell"><div class="day-num">6</div></div><div class="day-cell"><div class="day-num">7</div></div><div class="day-cell"><div class="day-num">8</div></div><div class="day-cell"><div class="day-num">9</div></div><div class="day-cell"><div class="day-num">10</div></div><div class="day-cell"><div class="day-num">11</div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">12</div></div><div class="day-cell"><div class="day-num">13</div></div><div class="day-cell"><div class="day-num">14</div></div><div class="day-cell"><div class="day-num">15</div></div><div class="day-cell"><div class="day-num">16</div></div><div class="day-cell"><div class="day-num">17</div></div><div class="day-cell"><div class="day-num">18</div><div class="lesson-pill" style="background: rgb(251, 234, 240); color: rgb(75, 21, 40); border: 0.5px solid rgb(212, 83, 126);"><span>→ Emanuela 15:00</span></div><div class="lesson-pill" style="background: rgb(230, 241, 251); color: rgb(4, 44, 83); border: 0.5px solid rgb(55, 138, 221);"><span>→ Luisa 15:45</span></div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(255, 248, 230); color: rgb(122, 80, 0); border: 0.5px solid rgb(239, 159, 39);"><span>↺ Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">19</div></div><div class="day-cell"><div class="day-num">20</div></div><div class="day-cell"><div class="day-num">21</div></div><div class="day-cell"><div class="day-num">22</div></div><div class="day-cell"><div class="day-num">23</div></div><div class="day-cell"><div class="day-num">24</div></div><div class="day-cell"><div class="day-num">25</div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">26</div></div><div class="day-cell"><div class="day-num">27</div></div><div class="day-cell"><div class="day-num">28</div></div><div class="day-cell"><div class="day-num">29</div></div><div class="day-cell"><div class="day-num">30</div></div><div class="day-cell other-month"><div class="day-num">1</div></div><div class="day-cell other-month"><div class="day-num">2</div></div><div class="day-cell other-month"><div class="day-num">3</div></div><div class="day-cell other-month"><div class="day-num">4</div></div><div class="day-cell other-month"><div class="day-num">5</div></div></div>
+
+  <div class="sidebar">
+    <div class="sidebar-card">
+      <h3><i class="ti ti-users"></i> Allievi</h3>
+      <div id="students-list"><div class="student-item" onclick="editStudent(1)">
+      <div class="student-avatar" style="background:#FAECE7;color:#4A1B0C;border:1px solid #D85A30">P</div>
+      <div class="student-info">
+        <div class="student-name">Patrizia <span class="end-badge active-end">dal 1 apr 2026 · fino al 25 giu 2026</span></div>
+        <div class="student-time">Giovedì · 17:30 · 60 min</div>
+      </div>
+      <div class="student-dot" style="background:#D85A30"></div>
+    </div><div class="student-item" onclick="editStudent(2)">
+      <div class="student-avatar" style="background:#E1F5EE;color:#04342C;border:1px solid #1D9E75">L</div>
+      <div class="student-info">
+        <div class="student-name">Laura <span class="end-badge active-end">dal 1 mag 2026 · fino al 18 giu 2026</span></div>
+        <div class="student-time">Giovedì · 16:30 · 45 min</div>
+      </div>
+      <div class="student-dot" style="background:#1D9E75"></div>
+    </div><div class="student-item" onclick="editStudent(3)">
+      <div class="student-avatar" style="background:#E6F1FB;color:#042C53;border:1px solid #378ADD">L</div>
+      <div class="student-info">
+        <div class="student-name">Luisa <span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div>
+        <div class="student-time">Giovedì · 15:45 · 45 min</div>
+      </div>
+      <div class="student-dot" style="background:#378ADD"></div>
+    </div><div class="student-item" onclick="editStudent(4)">
+      <div class="student-avatar" style="background:#FBEAF0;color:#4B1528;border:1px solid #D4537E">E</div>
+      <div class="student-info">
+        <div class="student-name">Emanuela <span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div>
+        <div class="student-time">Giovedì · 15:00 · 45 min</div>
+      </div>
+      <div class="student-dot" style="background:#D4537E"></div>
+    </div></div>
+      <button class="add-btn" onclick="openAddStudent()"><i class="ti ti-plus"></i> Aggiungi allievo</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="sidebar-card">
+        <h3><i class="ti ti-calendar-event"></i> Prossime lezioni</h3>
+        <div id="upcoming-list"><div class="upcoming-item">
+      <div class="upcoming-date">11 giu</div>
+      <div class="student-dot" style="background:#1D9E75;flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">Laura</div>
+        <div class="upcoming-hour">16:30</div>
+      </div>
+    </div><div class="upcoming-item">
+      <div class="upcoming-date">11 giu</div>
+      <div class="student-dot" style="background:#D85A30;flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">Patrizia</div>
+        <div class="upcoming-hour">17:30</div>
+      </div>
+    </div><div class="upcoming-item">
+      <div class="upcoming-date">18 giu</div>
+      <div class="student-dot" style="background:#1D9E75;flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">Laura</div>
+        <div class="upcoming-hour">16:30</div>
+      </div>
+    </div><div class="upcoming-item">
+      <div class="upcoming-date">18 giu</div>
+      <div class="student-dot" style="background:#D4537E;flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">Emanuela</div>
+        <div class="upcoming-hour">15:00</div>
+      </div>
+    </div><div class="upcoming-item">
+      <div class="upcoming-date">18 giu</div>
+      <div class="student-dot" style="background:#378ADD;flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">Luisa</div>
+        <div class="upcoming-hour">15:45</div>
+      </div>
+    </div></div>
+      </div>
+      <div class="sidebar-card">
+        <h3><i class="ti ti-refresh"></i> Da recuperare</h3>
+        <div id="makeup-list"><div class="makeup-item">
+      <i class="ti ti-refresh makeup-icon"></i>
+      <div>
+        <div class="makeup-name">Patrizia</div>
+        <div class="makeup-date">18 giu 2026</div>
+      </div>
+      <div class="student-dot" style="background:#D85A30;flex-shrink:0;margin-left:auto"></div>
+    </div><div class="makeup-item">
+      <i class="ti ti-refresh makeup-icon"></i>
+      <div>
+        <div class="makeup-name">Patrizia</div>
+        <div class="makeup-date">28 mag 2026</div>
+      </div>
+      <div class="student-dot" style="background:#D85A30;flex-shrink:0;margin-left:auto"></div>
+    </div></div>
+        <button class="link-btn" onclick="openHistory()">Vedi storico completo →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal allievo -->
+<div class="modal-overlay" id="modal-student">
+  <div class="modal">
+    <h3 id="modal-title">Nuovo allievo</h3>
+    <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
+    <div class="field"><label>Giorno della settimana</label>
+      <select id="s-day">
+        <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
+        <option value="4">Giovedì</option><option value="5">Venerdì</option><option value="6">Sabato</option><option value="0">Domenica</option>
+      </select>
+    </div>
+    <div class="field"><label>Orario</label><input type="time" id="s-time" value="10:00"></div>
+    <div class="field"><label>Durata (minuti)</label>
+      <select id="s-duration">
+        <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected="">60 min</option><option value="90">90 min</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Inizio lezioni</label>
+      <div class="end-toggle" style="margin-bottom:6px;">
+        <button id="start-today-btn" onclick="setStartPreset('today')" style="font-size:11px;">Oggi</button>
+        <button id="start-date-btn" onclick="setStartPreset('date')" style="font-size:11px;">Data libera</button>
+        <button id="start-trim-btn" onclick="setStartPreset('trim')" style="font-size:11px;">Trimestre</button>
+        <button id="start-year-btn" onclick="setStartPreset('year')" style="font-size:11px;">Anno sc.</button>
+      </div>
+      <div id="start-date-field" style="display:none"><input type="date" id="s-startdate"></div>
+      <div id="start-preset-field" style="display:none">
+        <select id="s-startpreset">
+          <optgroup label="Trimestri">
+            <option value="trim-oct">Ottobre–Dicembre</option>
+            <option value="trim-jan">Gennaio–Marzo</option>
+            <option value="trim-apr">Aprile–Giugno</option>
+          </optgroup>
+          <optgroup label="Anno scolastico">
+            <option value="year-oct">Ottobre–Giugno</option>
+          </optgroup>
+        </select>
+        <select id="s-startyear" style="margin-top:5px;"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Fine ricorrenza</label>
+      <div class="end-toggle">
+        <button id="end-never-btn" class="active" onclick="setEndMode('never')">Nessuna fine</button>
+        <button id="end-date-btn" onclick="setEndMode('date')">Fino al giorno</button>
+        <button id="end-count-btn" onclick="setEndMode('count')">N° lezioni</button>
+      </div>
+      <div id="end-date-field" style="display:none"><input type="date" id="s-enddate"></div>
+      <div id="end-count-field" style="display:none"><input type="number" id="s-endcount" min="1" max="200" placeholder="es. 10"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="delete-btn" onclick="deleteStudent()" style="display:none"><i class="ti ti-trash"></i> Elimina</button>
+      <button class="btn-cancel" onclick="closeModal()">Annulla</button>
+      <button class="btn-primary" onclick="saveStudent()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal lezione -->
+<div class="modal-overlay" id="modal-lesson">
+  <div class="modal">
+    <h3 id="lesson-modal-title">Luisa</h3>
+    <div style="font-size:14px;color:var(--color-text-secondary);line-height:1.6;" id="lesson-modal-body">
+    <strong>11 giugno 2026</strong>
+    <br>
+    Orario: 15:45 · Durata: 45 min
+  </div>
+    <div class="status-toggle">
+      <button id="status-btn-cancelled" onclick="setLessonStatus('cancelled')" class=""><i class="ti ti-x"></i> Annullata</button>
+      <button id="status-btn-makeup" onclick="setLessonStatus('makeup')" class=""><i class="ti ti-refresh"></i> Da recuperare</button>
+    </div>
+    <div class="action-row">
+      <button class="btn-move" onclick="openMoveLesson()"><i class="ti ti-calendar-move"></i> Sposta</button>
+      <button class="btn-delete-lesson" onclick="deleteLesson()"><i class="ti ti-trash"></i> Elimina</button>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Note</label><input type="text" id="lesson-note" placeholder="Aggiungi note..."></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
+      <button class="btn-primary" onclick="saveNote()">Salva nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal sposta lezione -->
+<div class="modal-overlay" id="modal-move">
+  <div class="modal">
+    <h3>Sposta lezione</h3>
+    <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;" id="move-modal-body">Spostamento di: Luisa — 11 giugno 2026</div>
+    <div class="field"><label>Nuova data</label><input type="date" id="move-date"></div>
+    <div class="field"><label>Nuovo orario</label><input type="time" id="move-time"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeMoveModal()">Annulla</button>
+      <button class="btn-primary" onclick="confirmMove()">Conferma spostamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal storico annulli/recuperi -->
+<div class="modal-overlay" id="modal-history">
+  <div class="modal" style="max-width:480px;">
+    <h3>Storico lezioni annullate e recuperi</h3>
+    <div class="history-filters">
+      <button id="hist-filter-all" class="active" onclick="setHistoryFilter('all')">Tutte</button>
+      <button id="hist-filter-makeup" onclick="setHistoryFilter('makeup')">Da recuperare</button>
+      <button id="hist-filter-recovered" onclick="setHistoryFilter('recovered')">Recuperate</button>
+      <button id="hist-filter-cancelled" onclick="setHistoryFilter('cancelled')">Annullate</button>
+    </div>
+    <div id="history-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeHistoryModal()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = [
+  { bg: '#FAECE7', border: '#D85A30', text: '#4A1B0C', dot: '#D85A30' },
+  { bg: '#E1F5EE', border: '#1D9E75', text: '#04342C', dot: '#1D9E75' },
+  { bg: '#E6F1FB', border: '#378ADD', text: '#042C53', dot: '#378ADD' },
+  { bg: '#FBEAF0', border: '#D4537E', text: '#4B1528', dot: '#D4537E' },
+  { bg: '#FAEEDA', border: '#EF9F27', text: '#412402', dot: '#EF9F27' },
+  { bg: '#EEEDFE', border: '#7F77DD', text: '#26215C', dot: '#7F77DD' },
+];
+const DAYS_IT = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+
+let currentDate = new Date();
+let editingId = null;
+let currentLessonKey = null;
+let currentEndMode = 'never';
+
+// ---- School year helpers ----
+// A "school year" key is the calendar year in which it starts, e.g. "2025" = Sept 2025 - June 2026.
+function emptyYearData() {
+  return { students: [], nextId: 1, notes: {}, lessonStatus: {}, movedLessons: {}, deletedLessons: [] };
+}
+
+function schoolYearKeyForDate(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth(); // 0=Jan ... 7=Aug, 8=Sept ... 11=Dec
+  if (m >= 8) return String(y);       // Sett-Dic -> anno scolastico che inizia in questo anno
+  if (m <= 5) return String(y - 1);   // Gen-Giu -> appartiene all'anno scolastico iniziato l'anno prima
+  return String(y);                    // Lug-Ago (estate) -> considerato come l'anno scolastico in arrivo
+}
+
+function schoolYearLabel(key) {
+  return `${key}/${parseInt(key) + 1}`;
+}
+
+// Returns 0 (Settembre) .. 9 (Giugno) if date falls within the given school year, otherwise out of range.
+function monthIndexInSchoolYear(date, key) {
+  const y = parseInt(key);
+  const startOfYear = new Date(y, 8, 1);
+  return (date.getFullYear() - startOfYear.getFullYear()) * 12 + (date.getMonth() - startOfYear.getMonth());
+}
+
+// Clamps a date to the nearest valid month (Sett..Giu) within the given school year.
+function clampDateToSchoolYear(date, key) {
+  const idx = monthIndexInSchoolYear(date, key);
+  if (idx < 0) return new Date(parseInt(key), 8, 1);
+  if (idx > 9) return new Date(parseInt(key) + 1, 5, 1);
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+// Migrates the old single-year flat data format into the new multi-year format,
+// guessing the right school year from whatever dates are found in the data.
+function migrateFlatToSchoolYears(flat) {
+  const candidateDates = [];
+  (flat.students || []).forEach(s => { if (s.startDate) { const d = new Date(s.startDate + 'T00:00:00'); if (!isNaN(d)) candidateDates.push(d); } });
+  Object.keys(flat.lessonStatus || {}).forEach(k => { const d = new Date(k.split('_')[0]); if (!isNaN(d)) candidateDates.push(d); });
+  Object.keys(flat.movedLessons || {}).forEach(k => { const d = new Date(k.split('_')[0]); if (!isNaN(d)) candidateDates.push(d); });
+  Object.keys(flat.notes || {}).forEach(k => { const d = new Date(k.split('_')[0]); if (!isNaN(d)) candidateDates.push(d); });
+  let key;
+  if (candidateDates.length) {
+    candidateDates.sort((a, b) => a - b);
+    key = schoolYearKeyForDate(candidateDates[0]);
+  } else {
+    key = schoolYearKeyForDate(new Date());
+  }
+  const obj = {};
+  obj[key] = {
+    students: flat.students || [],
+    nextId: flat.nextId || ((flat.students || []).length + 1),
+    notes: flat.notes || {},
+    lessonStatus: flat.lessonStatus || {},
+    movedLessons: flat.movedLessons || {},
+    deletedLessons: flat.deletedLessons || [],
+  };
+  return { schoolYears: obj, currentSchoolYear: key };
+}
+
+// Commits the in-memory active-year variables back into the schoolYears store.
+function commitActiveYear() {
+  if (!currentSchoolYear) return;
+  schoolYears[currentSchoolYear] = {
+    students, nextId, notes, lessonStatus, movedLessons,
+    deletedLessons: [...deletedLessons],
+  };
+}
+
+// Loads the given school year's data into the active-year variables, creating it empty if needed.
+function loadActiveYear(key) {
+  if (!schoolYears[key]) schoolYears[key] = emptyYearData();
+  const d = schoolYears[key];
+  students = d.students || [];
+  nextId = d.nextId || (students.length + 1);
+  notes = d.notes || {};
+  lessonStatus = d.lessonStatus || {};
+  movedLessons = d.movedLessons || {};
+  deletedLessons = new Set(d.deletedLessons || []);
+  currentSchoolYear = key;
+}
+
+function updateYearLabel() {
+  document.getElementById('year-label').textContent = schoolYearLabel(currentSchoolYear);
+}
+
+function switchToSchoolYear(key) {
+  commitActiveYear();
+  loadActiveYear(key);
+  currentDate = clampDateToSchoolYear(currentDate, key);
+  saveData();
+  renderCalendar();
+}
+
+function changeSchoolYear(delta) {
+  const newKey = String(parseInt(currentSchoolYear) + delta);
+  switchToSchoolYear(newKey);
+}
+
+function getEmbeddedData() {
+  try {
+    const el = document.getElementById('appdata');
+    if (!el || !el.textContent.trim()) return null;
+    return JSON.parse(el.textContent);
+  } catch(e) { return null; }
+}
+
+function loadData() {
+  // Priority: embedded data in file > localStorage (fallback for older versions)
+  const embedded = getEmbeddedData();
+  let raw = embedded;
+  if (!raw) {
+    try {
+      raw = JSON.parse(localStorage.getItem('cl_data') || 'null');
+    } catch(e) { raw = null; }
+  }
+  // Backward compat with even older per-field localStorage keys
+  if (!raw) {
+    try {
+      const legacyStudents = JSON.parse(localStorage.getItem('cl_students') || 'null');
+      if (legacyStudents) {
+        raw = {
+          students: legacyStudents,
+          nextId: parseInt(localStorage.getItem('cl_nextId') || '1'),
+          notes: JSON.parse(localStorage.getItem('cl_notes') || '{}'),
+          lessonStatus: JSON.parse(localStorage.getItem('cl_lessonStatus') || '{}'),
+          movedLessons: JSON.parse(localStorage.getItem('cl_movedLessons') || '{}'),
+          deletedLessons: JSON.parse(localStorage.getItem('cl_deletedLessons') || '[]'),
+        };
+      }
+    } catch(e) {}
+  }
+  if (!raw) return null;
+  if (raw.schoolYears) return raw; // already in the new multi-year format
+  return migrateFlatToSchoolYears(raw); // old single-year format -> migrate
+}
+
+function getCurrentData() {
+  commitActiveYear();
+  return { schoolYears, currentSchoolYear };
+}
+
+let hasUnsavedChanges = false;
+
+function markUnsaved() {
+  hasUnsavedChanges = true;
+  document.getElementById('unsaved-dot').classList.add('visible');
+}
+
+function saveData() {
+  // Keep localStorage as live session cache
+  const d = getCurrentData();
+  localStorage.setItem('cl_data', JSON.stringify(d));
+  markUnsaved();
+  schedulePush();
+}
+
+// ---- Remote sync (Netlify Function + Netlify Blobs) ----
+// Auto-esporta verso il server ad ogni modifica (con un piccolo ritardo per
+// raggruppare modifiche ravvicinate) e come rete di sicurezza anche alla
+// chiusura/nascondimento della pagina. Auto-importa dal server all'apertura
+// se sul server c'è una copia più recente di quella locale.
+const SYNC_SAVE_URL = '/api/save-data';
+const SYNC_LOAD_URL = '/api/load-data';
+let lastSyncedAt = localStorage.getItem('cl_last_synced_at') || null;
+let syncTimer = null;
+
+function setSyncStatus(state) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const labels = {
+    syncing: 'Sincronizzazione…',
+    ok: 'Sincronizzato',
+    offline: 'Solo locale (rete assente)',
+    error: 'Errore di sincronizzazione'
+  };
+  el.textContent = labels[state] || '';
+  el.className = 'sync-status sync-' + state;
+}
+
+async function pushToServer() {
+  try {
+    setSyncStatus('syncing');
+    const res = await fetch(SYNC_SAVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getCurrentData())
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const { savedAt } = await res.json();
+    lastSyncedAt = savedAt;
+    localStorage.setItem('cl_last_synced_at', lastSyncedAt);
+    setSyncStatus('ok');
+    hasUnsavedChanges = false;
+    document.getElementById('unsaved-dot').classList.remove('visible');
+  } catch (e) {
+    console.warn('Sync push fallita:', e);
+    setSyncStatus('offline');
+  }
+}
+
+function schedulePush() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushToServer, 700);
+}
+
+// Invio "best effort" con sendBeacon quando la pagina si nasconde o si
+// chiude: a differenza di fetch, sendBeacon viene garantito dal browser
+// anche se la pagina sta per essere scaricata.
+function flushPushBeacon() {
+  try {
+    const blob = new Blob([JSON.stringify(getCurrentData())], { type: 'application/json' });
+    navigator.sendBeacon(SYNC_SAVE_URL, blob);
+  } catch (e) { /* best effort */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPushBeacon();
+});
+window.addEventListener('pagehide', flushPushBeacon);
+
+async function pullFromServerIfNewer() {
+  try {
+    setSyncStatus('syncing');
+    const res = await fetch(SYNC_LOAD_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const { record } = await res.json();
+    if (record && record.payload && (!lastSyncedAt || new Date(record.savedAt) > new Date(lastSyncedAt))) {
+      schoolYears = record.payload.schoolYears || schoolYears;
+      loadActiveYear(record.payload.currentSchoolYear || Object.keys(schoolYears)[0]);
+      currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
+      localStorage.setItem('cl_data', JSON.stringify(record.payload));
+      lastSyncedAt = record.savedAt;
+      localStorage.setItem('cl_last_synced_at', lastSyncedAt);
+      renderCalendar();
+    }
+    setSyncStatus('ok');
+  } catch (e) {
+    console.warn('Sync pull fallita:', e);
+    setSyncStatus('offline');
+  }
+}
+
+// Store the original HTML source at page load, before any dynamic changes
+let _originalSource = null;
+(function captureSource() {
+  // We inline the source via a hidden script — capture it synchronously
+  try {
+    const x = new XMLHttpRequest();
+    x.open('GET', location.href, false); // synchronous
+    x.send();
+    _originalSource = x.responseText;
+  } catch(e) {
+    // file:// with blocked sync XHR — will use outerHTML fallback
+    _originalSource = null;
+  }
+})();
+
+async function exportFile() {
+  const data = getCurrentData();
+  const json = JSON.stringify(data, null, 2);
+
+  let src = _originalSource;
+
+  // Fallback: try async fetch
+  if (!src) {
+    try {
+      const resp = await fetch(location.href);
+      src = await resp.text();
+    } catch(e) { src = null; }
+  }
+
+  // Last resort: reconstruct from outerHTML (data tag will be empty but structure ok)
+  if (!src) {
+    src = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  }
+
+  // Inject current data into the appdata block
+  const datascriptRe = /(<script id="appdata" type="application\/json">)[^<]*(<\/script>)/;
+  let updated;
+  if (datascriptRe.test(src)) {
+    updated = src.replace(datascriptRe, `$1\n${json}\n$2`);
+  } else {
+    updated = src.replace('</body>', `<script id="appdata" type="application/json">\n${json}\n<\/script>\n</body>`);
+  }
+
+  const blob = new Blob([updated], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'calendario-lezioni-canto.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  hasUnsavedChanges = false;
+  document.getElementById('unsaved-dot').classList.remove('visible');
+}
+
+function importFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (hasUnsavedChanges) {
+    if (!confirm('Hai modifiche non esportate. Importando un file le perderai. Continuare?')) {
+      event.target.value = '';
+      return;
+    }
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(e.target.result, 'text/html');
+      const el = doc.getElementById('appdata');
+      if (!el) { alert('File non valido: nessun dato trovato.'); return; }
+      const data = JSON.parse(el.textContent);
+      // Apply imported data (supports both the new multi-year format and the old flat one)
+      const loaded = data.schoolYears ? data : migrateFlatToSchoolYears(data);
+      schoolYears = loaded.schoolYears;
+      loadActiveYear(loaded.currentSchoolYear || Object.keys(schoolYears)[0]);
+      currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
+      saveData();
+      hasUnsavedChanges = false;
+      document.getElementById('unsaved-dot').classList.remove('visible');
+      renderCalendar();
+      alert('Dati importati con successo!');
+    } catch(err) {
+      alert('Errore durante l\'importazione: ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+window.addEventListener('beforeunload', function(e) {
+  if (hasUnsavedChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+let schoolYears = {};
+let currentSchoolYear = null;
+let students, nextId, notes, lessonStatus, movedLessons, deletedLessons;
+
+const loaded = loadData();
+if (loaded) {
+  schoolYears = loaded.schoolYears;
+  loadActiveYear(loaded.currentSchoolYear);
+  currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
+} else {
+  // Fresh install: start empty from the 2025/2026 school year (1 settembre 2025), no students.
+  schoolYears = { '2025': emptyYearData() };
+  loadActiveYear('2025');
+  currentDate = new Date(2025, 8, 1);
+}
+
+function getStatus(key) { return lessonStatus[key] || 'normal'; }
+
+// Build a flat list of all lesson occurrences for a given month view range.
+// Returns array of { origKey, student, idx, displayDate, displayTime, isMoved }
+function getLessonsForCalendar(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  // Expand ±7 days to catch moved lessons landing in this month from adjacent
+  const rangeStart = new Date(year, month - 1, 20);
+  const rangeEnd = new Date(year, month + 1, 10);
+  const results = [];
+  const usedMovedKeys = new Set();
+
+  // First: iterate each day in range and check recurring slots
+  students.forEach((s, idx) => {
+    const cur = new Date(rangeStart);
+    while (cur <= rangeEnd) {
+      if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+        const origKey = cur.toDateString() + '_' + s.id;
+        if (!deletedLessons.has(origKey)) {
+          if (movedLessons[origKey]) {
+            // This slot was moved — skip original position, will render at new position
+          } else {
+            results.push({ origKey, student: s, idx, displayDate: new Date(cur), displayTime: s.time, isMoved: false });
+          }
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  // Second: render moved lessons at their new position
+  Object.entries(movedLessons).forEach(([origKey, { date: newDateStr, time: newTime }]) => {
+    const newDate = new Date(newDateStr);
+    if (newDate < rangeStart || newDate > rangeEnd) return;
+    const sid = parseInt(origKey.split('_')[1]);
+    const s = students.find(x => x.id === sid);
+    if (!s || deletedLessons.has(origKey)) return;
+    const idx = students.indexOf(s);
+    results.push({ origKey, student: s, idx, displayDate: newDate, displayTime: newTime, isMoved: true });
+  });
+
+  return results;
+}
+
+function getColor(idx) { return COLORS[idx % COLORS.length]; }
+
+// Returns true if a lesson on `date` is within the student's active window
+function isLessonActive(s, date) {
+  // Check start
+  if (s.startDate) {
+    const start = new Date(s.startDate + 'T00:00:00');
+    if (date < start) return false;
+  }
+  // Check end
+  if (!s.endMode || s.endMode === 'never') return true;
+  if (s.endMode === 'date') {
+    if (!s.endDate) return true;
+    const end = new Date(s.endDate + 'T23:59:59');
+    return date <= end;
+  }
+  if (s.endMode === 'count') {
+    if (!s.endCount) return true;
+    // Count occurrences from startDate (or 2020 fallback) up to and including date
+    const startRef = s.startDate ? new Date(s.startDate + 'T00:00:00') : new Date(2020, 0, 1);
+    let first = new Date(startRef);
+    while (first.getDay() !== s.day) first.setDate(first.getDate() + 1);
+    const target = new Date(date); target.setHours(0,0,0,0);
+    let count = 0;
+    const cur = new Date(first);
+    while (cur <= target) { count++; cur.setDate(cur.getDate() + 7); }
+    return count <= s.endCount;
+  }
+  return true;
+}
+
+function startLabel(s) {
+  if (!s.startDate) return null;
+  const d = new Date(s.startDate + 'T12:00:00');
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  return `dal ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function endLabel(s) {
+  if (!s.endMode || s.endMode === 'never') return null;
+  if (s.endMode === 'date' && s.endDate) {
+    const d = new Date(s.endDate + 'T12:00:00');
+    const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    return `fino al ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  if (s.endMode === 'count' && s.endCount) return `${s.endCount} lezioni`;
+  return null;
+}
+
+function periodLabel(s) {
+  const sl = startLabel(s), el = endLabel(s);
+  if (sl && el) return `${sl} · ${el}`;
+  if (sl) return sl;
+  if (el) return el;
+  return null;
+}
+
+function setEndMode(mode) {
+  currentEndMode = mode;
+  ['never','date','count'].forEach(m => {
+    document.getElementById(`end-${m}-btn`).classList.toggle('active', m === mode);
+  });
+  document.getElementById('end-date-field').style.display = mode === 'date' ? 'block' : 'none';
+  document.getElementById('end-count-field').style.display = mode === 'count' ? 'block' : 'none';
+}
+
+let currentStartPreset = 'today';
+
+function populateYearSelect() {
+  const sel = document.getElementById('s-startyear');
+  sel.innerHTML = '';
+  const y = new Date().getFullYear();
+  for (let i = y - 1; i <= y + 2; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i;
+    if (i === y) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function presetToStartEnd(preset, year) {
+  year = parseInt(year);
+  // Returns { startDate: 'YYYY-MM-DD', endDate: 'YYYY-MM-DD' }
+  switch(preset) {
+    case 'trim-oct': return { startDate: `${year}-10-01`, endDate: `${year}-12-31` };
+    case 'trim-jan': return { startDate: `${year}-01-01`, endDate: `${year}-03-31` };
+    case 'trim-apr': return { startDate: `${year}-04-01`, endDate: `${year}-06-30` };
+    case 'year-oct': return { startDate: `${year}-10-01`, endDate: `${year+1}-06-30` };
+    default: return null;
+  }
+}
+
+function setStartPreset(mode) {
+  currentStartPreset = mode;
+  ['today','date','trim','year'].forEach(m => {
+    const btn = document.getElementById(`start-${m}-btn`);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  document.getElementById('start-date-field').style.display = mode === 'date' ? 'block' : 'none';
+  document.getElementById('start-preset-field').style.display = (mode === 'trim' || mode === 'year') ? 'block' : 'none';
+  if (mode === 'trim') {
+    // Show only trimestre options
+    const sel = document.getElementById('s-startpreset');
+    [...sel.options].forEach(o => {
+      o.style.display = o.value.startsWith('trim') ? '' : 'none';
+    });
+    sel.value = 'trim-oct';
+    applyPresetToEnd();
+  }
+  if (mode === 'year') {
+    const sel = document.getElementById('s-startpreset');
+    [...sel.options].forEach(o => {
+      o.style.display = o.value.startsWith('year') ? '' : 'none';
+    });
+    sel.value = 'year-oct';
+    applyPresetToEnd();
+  }
+  if (mode === 'today') {
+    const today = new Date().toISOString().slice(0,10);
+    applyCustomStart(today);
+  }
+}
+
+function applyPresetToEnd() {
+  const preset = document.getElementById('s-startpreset').value;
+  const year = document.getElementById('s-startyear').value;
+  const result = presetToStartEnd(preset, year);
+  if (!result) return;
+  // Set start date hidden value and auto-fill end date
+  document.getElementById('s-startdate').value = result.startDate;
+  // Also set end mode to 'date' and fill enddate
+  setEndMode('date');
+  document.getElementById('s-enddate').value = result.endDate;
+}
+
+function applyCustomStart(dateStr) {
+  document.getElementById('s-startdate').value = dateStr;
+}
+
+function renderLegend() {
+  document.getElementById('legend').innerHTML = students.map((s, i) => {
+    const c = getColor(i);
+    const lbl = periodLabel(s);
+    return `<div class="legend-item"><div class="legend-dot" style="background:${c.dot}"></div><span>${s.name.split(' ')[0]}</span>${lbl ? `<span class="end-badge active-end">${lbl}</span>` : ''}</div>`;
+  }).join('');
+}
+
+function renderStudents() {
+  const el = document.getElementById('students-list');
+  if (!students.length) { el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessun allievo ancora.</p>'; return; }
+  el.innerHTML = students.map((s, i) => {
+    const c = getColor(i);
+    const initials = s.name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase();
+    const lbl = periodLabel(s);
+    return `<div class="student-item" onclick="editStudent(${s.id})">
+      <div class="student-avatar" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${initials}</div>
+      <div class="student-info">
+        <div class="student-name">${s.name}${lbl ? ` <span class="end-badge active-end">${lbl}</span>` : ''}</div>
+        <div class="student-time">${DAYS_IT[s.day]} · ${s.time} · ${s.duration} min</div>
+      </div>
+      <div class="student-dot" style="background:${c.dot}"></div>
+    </div>`;
+  }).join('');
+}
+
+function renderUpcoming() {
+  const el = document.getElementById('upcoming-list');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const rangeEnd = new Date(today); rangeEnd.setDate(today.getDate() + 21);
+
+  // Use same logic as getLessonsForCalendar but across a date range
+  const upcoming = [];
+  students.forEach((s, idx) => {
+    const cur = new Date(today);
+    while (cur <= rangeEnd) {
+      if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+        const origKey = cur.toDateString() + '_' + s.id;
+        if (!deletedLessons.has(origKey) && !movedLessons[origKey] && getStatus(origKey) === 'normal') {
+          upcoming.push({ date: new Date(cur), student: s, idx, time: s.time });
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+  // Add moved lessons landing in range
+  Object.entries(movedLessons).forEach(([origKey, { date: newDateStr, time: newTime }]) => {
+    const newDate = new Date(newDateStr);
+    if (newDate < today || newDate > rangeEnd) return;
+    const sid = parseInt(origKey.split('_')[1]);
+    const s = students.find(x => x.id === sid);
+    if (!s || deletedLessons.has(origKey) || getStatus(origKey) !== 'normal') return;
+    upcoming.push({ date: newDate, student: s, idx: students.indexOf(s), time: newTime });
+  });
+
+  upcoming.sort((a, b) => a.date - b.date || a.time.localeCompare(b.time));
+  const shown = upcoming.slice(0, 5);
+  if (!shown.length) { el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessuna lezione prossima.</p>'; return; }
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  el.innerHTML = shown.map(({ date, student, idx, time }) => {
+    const c = getColor(idx);
+    const isToday = date.toDateString() === today.toDateString();
+    const label = isToday ? 'Oggi' : `${date.getDate()} ${months[date.getMonth()]}`;
+    return `<div class="upcoming-item">
+      <div class="upcoming-date">${label}</div>
+      <div class="student-dot" style="background:${c.dot};flex-shrink:0"></div>
+      <div>
+        <div class="upcoming-name">${student.name.split(' ')[0]}</div>
+        <div class="upcoming-hour">${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMakeup() {
+  const el = document.getElementById('makeup-list');
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  const makeupEntries = [];
+  Object.entries(lessonStatus).forEach(([key, status]) => {
+    if (status !== 'makeup') return;
+    const [dateStr, sidStr] = key.split('_');
+    const sid = parseInt(sidStr);
+    const s = students.find(x => x.id === sid);
+    if (!s) return;
+    const date = new Date(dateStr);
+    makeupEntries.push({ key, date, student: s, idx: students.indexOf(s) });
+  });
+  makeupEntries.sort((a, b) => b.date - a.date); // most recent first
+  if (!makeupEntries.length) { el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessuna lezione da recuperare.</p>'; return; }
+  el.innerHTML = makeupEntries.map(({ key, date, student }) => {
+    const c = getColor(students.indexOf(student));
+    return `<div class="makeup-item" onclick="openLessonFromKey('${key}')">
+      <i class="ti ti-refresh makeup-icon"></i>
+      <div>
+        <div class="makeup-name">${student.name.split(' ')[0]}</div>
+        <div class="makeup-date">${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}</div>
+      </div>
+      <div class="student-dot" style="background:${c.dot};flex-shrink:0;margin-left:auto"></div>
+    </div>`;
+  }).join('');
+}
+
+// Opens the lesson modal given a raw origKey (used by makeup/history list clicks)
+function openLessonFromKey(key) {
+  const [dateStr, sidStr] = key.split('_');
+  const sid = parseInt(sidStr);
+  const s = students.find(x => x.id === sid);
+  if (!s) return;
+  const moved = movedLessons[key];
+  const displayDate = moved ? new Date(moved.date) : new Date(dateStr);
+  const displayTime = moved ? moved.time : s.time;
+  closeHistoryModal();
+  openLesson(s, displayDate, key, displayTime);
+}
+
+let historyFilter = 'all';
+function setHistoryFilter(filter) {
+  historyFilter = filter;
+  ['all','makeup','recovered','cancelled'].forEach(f => {
+    document.getElementById(`hist-filter-${f}`).classList.toggle('active', f === filter);
+  });
+  renderHistory();
+}
+
+function openHistory() {
+  historyFilter = 'all';
+  ['all','makeup','recovered','cancelled'].forEach(f => {
+    document.getElementById(`hist-filter-${f}`).classList.toggle('active', f === 'all');
+  });
+  renderHistory();
+  document.getElementById('modal-history').classList.add('open');
+}
+function closeHistoryModal() {
+  document.getElementById('modal-history').classList.remove('open');
+}
+
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  const entries = [];
+  Object.entries(lessonStatus).forEach(([key, status]) => {
+    if (status !== 'cancelled' && status !== 'makeup' && status !== 'recovered') return;
+    if (historyFilter !== 'all' && status !== historyFilter) return;
+    const [dateStr, sidStr] = key.split('_');
+    const sid = parseInt(sidStr);
+    const s = students.find(x => x.id === sid);
+    if (!s) return;
+    const date = new Date(dateStr);
+    const moved = movedLessons[key];
+    entries.push({ key, date, student: s, status, moved });
+  });
+  entries.sort((a, b) => b.date - a.date);
+  if (!entries.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessuna lezione in questa categoria.</p>';
+    return;
+  }
+  el.innerHTML = entries.map(({ key, date, student, status, moved }) => {
+    const c = getColor(students.indexOf(student));
+    const badgeClass = status === 'cancelled' ? 'badge-cancelled' : status === 'makeup' ? 'badge-makeup' : 'badge-recovered';
+    const badgeLabel = status === 'cancelled' ? 'Annullata' : status === 'makeup' ? 'Da recuperare' : 'Recuperata';
+    let sub = '';
+    if (status === 'recovered' && moved) {
+      const md = new Date(moved.date);
+      sub = `<div class="history-sub">Recuperata il ${md.getDate()} ${months[md.getMonth()]} ${md.getFullYear()} · ${moved.time}</div>`;
+    }
+    return `<div class="history-item" style="cursor:pointer" onclick="openLessonFromKey('${key}')">
+      <div class="student-dot" style="background:${c.dot};flex-shrink:0;margin-top:4px"></div>
+      <div>
+        <div class="history-name">${student.name.split(' ')[0]}</div>
+        <div class="history-date">${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}</div>
+        ${sub}
+      </div>
+      <span class="history-badge ${badgeClass}">${badgeLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderCalendar() {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  document.getElementById('month-label').textContent = `${monthNames[month]} ${year}`;
+
+  const grid = document.getElementById('days-grid');
+  grid.innerHTML = '';
+
+  const firstDay = new Date(year, month, 1);
+  let startDow = firstDay.getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrev = new Date(year, month, 0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+
+  // Get all lessons for this view
+  const allLessons = getLessonsForCalendar(year, month);
+
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    let cellDate, otherMonth = false;
+    if (i < startDow) {
+      cellDate = new Date(year, month - 1, daysInPrev - startDow + i + 1); otherMonth = true;
+    } else if (i >= startDow + daysInMonth) {
+      cellDate = new Date(year, month + 1, i - startDow - daysInMonth + 1); otherMonth = true;
+    } else {
+      cellDate = new Date(year, month, i - startDow + 1);
+    }
+    if (otherMonth) cell.classList.add('other-month');
+    if (cellDate.getTime() === today.getTime()) cell.classList.add('today');
+
+    const numEl = document.createElement('div');
+    numEl.className = 'day-num';
+    numEl.textContent = cellDate.getDate();
+    cell.appendChild(numEl);
+
+    const cellStr = cellDate.toDateString();
+    const dayLessons = allLessons.filter(l => l.displayDate.toDateString() === cellStr);
+    // Sort by time
+    dayLessons.sort((a, b) => a.displayTime.localeCompare(b.displayTime));
+
+    dayLessons.forEach(({ origKey, student: s, idx, displayTime, isMoved }) => {
+      const status = getStatus(origKey);
+      const c = getColor(idx);
+      const pill = document.createElement('div');
+      pill.className = 'lesson-pill';
+      let pillStyle = '';
+      if (status === 'cancelled') {
+        pillStyle = `background:var(--color-background-tertiary);color:var(--color-text-tertiary);border:0.5px solid var(--color-border-tertiary);text-decoration:line-through;`;
+      } else if (status === 'makeup') {
+        pillStyle = `background:#FFF8E6;color:#7a5000;border:0.5px solid #EF9F27;`;
+      } else if (status === 'recovered') {
+        pillStyle = `background:#E7F7EE;color:#0B6B3A;border:0.5px solid #33A76A;`;
+      } else {
+        pillStyle = `background:${c.bg};color:${c.text};border:0.5px solid ${c.border};`;
+      }
+      pill.style.cssText = pillStyle;
+      const noteDot = notes[origKey] ? '· ' : '';
+      const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : isMoved ? '→ ' : '';
+      pill.innerHTML = `<span>${icon}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
+      pill.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
+      cell.appendChild(pill);
+    });
+
+    grid.appendChild(cell);
+  }
+  renderLegend();
+  renderStudents();
+  renderUpcoming();
+  renderMakeup();
+  updateYearLabel();
+  const idx = monthIndexInSchoolYear(currentDate, currentSchoolYear);
+  document.getElementById('prev-month-btn').disabled = idx <= 0;
+  document.getElementById('next-month-btn').disabled = idx >= 9;
+}
+
+function changeMonth(delta) {
+  const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + delta, 1);
+  const idx = monthIndexInSchoolYear(newDate, currentSchoolYear);
+  if (idx < 0 || idx > 9) return; // fuori dall'anno scolastico corrente
+  currentDate = newDate;
+  renderCalendar();
+}
+function goToday() {
+  const today = new Date();
+  const key = schoolYearKeyForDate(today);
+  if (key !== currentSchoolYear) {
+    commitActiveYear();
+    loadActiveYear(key);
+  }
+  currentDate = clampDateToSchoolYear(today, currentSchoolYear);
+  saveData();
+  renderCalendar();
+}
+
+function openAddStudent() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Nuovo allievo';
+  document.getElementById('s-name').value = '';
+  document.getElementById('s-day').value = '1';
+  document.getElementById('s-time').value = '10:00';
+  document.getElementById('s-duration').value = '60';
+  document.getElementById('delete-btn').style.display = 'none';
+  populateYearSelect();
+  document.getElementById('s-startpreset').addEventListener('change', applyPresetToEnd);
+  document.getElementById('s-startyear').addEventListener('change', applyPresetToEnd);
+  setStartPreset('today');
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('s-startdate').value = today;
+  setEndMode('never');
+  document.getElementById('s-enddate').value = '';
+  document.getElementById('s-endcount').value = '';
+  document.getElementById('modal-student').classList.add('open');
+}
+function editStudent(id) {
+  const s = students.find(x => x.id === id);
+  if (!s) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Modifica allievo';
+  document.getElementById('s-name').value = s.name;
+  document.getElementById('s-day').value = s.day;
+  document.getElementById('s-time').value = s.time;
+  document.getElementById('s-duration').value = s.duration;
+  document.getElementById('delete-btn').style.display = 'block';
+  populateYearSelect();
+  document.getElementById('s-startpreset').addEventListener('change', applyPresetToEnd);
+  document.getElementById('s-startyear').addEventListener('change', applyPresetToEnd);
+  // Restore start mode — default to 'date' if startDate set
+  const startMode = s.startDate ? 'date' : 'today';
+  setStartPreset(startMode);
+  document.getElementById('s-startdate').value = s.startDate || new Date().toISOString().slice(0,10);
+  setEndMode(s.endMode || 'never');
+  document.getElementById('s-enddate').value = s.endDate || '';
+  document.getElementById('s-endcount').value = s.endCount || '';
+  document.getElementById('modal-student').classList.add('open');
+}
+function saveStudent() {
+  const name = document.getElementById('s-name').value.trim();
+  if (!name) return;
+  const endMode = currentEndMode;
+  const endDate = endMode === 'date' ? document.getElementById('s-enddate').value : null;
+  const endCount = endMode === 'count' ? parseInt(document.getElementById('s-endcount').value) || null : null;
+  const startDate = document.getElementById('s-startdate').value || null;
+  const data = {
+    name, day: parseInt(document.getElementById('s-day').value),
+    time: document.getElementById('s-time').value,
+    duration: parseInt(document.getElementById('s-duration').value),
+    startDate, endMode, endDate, endCount
+  };
+  if (editingId) {
+    const idx = students.findIndex(x => x.id === editingId);
+    students[idx] = { ...students[idx], ...data };
+  } else {
+    students.push({ id: nextId++, ...data });
+  }
+  saveData(); closeModal(); renderCalendar();
+}
+function deleteStudent() {
+  students = students.filter(x => x.id !== editingId);
+  saveData(); closeModal(); renderCalendar();
+}
+
+let currentLessonStudent = null;
+let currentLessonDisplayTime = null;
+
+function openLesson(s, date, origKey, displayTime) {
+  currentLessonKey = origKey || (date.toDateString() + '_' + s.id);
+  currentLessonStudent = s;
+  currentLessonDisplayTime = displayTime || s.time;
+  const status = getStatus(currentLessonKey);
+  const isMoved = !!movedLessons[currentLessonKey];
+  const months = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  document.getElementById('lesson-modal-title').textContent = s.name;
+  document.getElementById('lesson-modal-body').innerHTML = `
+    <strong>${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}</strong>
+    ${isMoved ? '<span class="moved-badge">→ spostata</span>' : ''}
+    ${status === 'recovered' ? '<span class="recovered-badge">✓ Recuperata</span>' : ''}<br>
+    Orario: ${currentLessonDisplayTime} · Durata: ${s.duration} min
+  `;
+  const btnC = document.getElementById('status-btn-cancelled');
+  const btnM = document.getElementById('status-btn-makeup');
+  btnC.className = status === 'cancelled' ? 'active-cancelled' : '';
+  btnM.className = (status === 'makeup' || status === 'recovered') ? 'active-makeup' : '';
+  btnM.innerHTML = status === 'recovered'
+    ? '<i class="ti ti-refresh"></i> Recuperata (annulla)'
+    : '<i class="ti ti-refresh"></i> Da recuperare';
+  document.getElementById('lesson-note').value = notes[currentLessonKey] || '';
+  document.getElementById('modal-lesson').classList.add('open');
+}
+
+function openMoveLesson() {
+  if (!currentLessonKey) return;
+  const s = currentLessonStudent;
+  const moved = movedLessons[currentLessonKey];
+  const origDateStr = currentLessonKey.split('_')[0];
+  const origDate = new Date(origDateStr);
+  const months = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  document.getElementById('move-modal-body').textContent =
+    `Spostamento di: ${s.name} — ${origDate.getDate()} ${months[origDate.getMonth()]} ${origDate.getFullYear()}`;
+  // Pre-fill with current display date/time
+  if (moved) {
+    document.getElementById('move-date').value = moved.date;
+    document.getElementById('move-time').value = moved.time;
+  } else {
+    // Default to next week
+    const next = new Date(origDate);
+    next.setDate(next.getDate() + 7);
+    document.getElementById('move-date').value = next.toISOString().slice(0, 10);
+    document.getElementById('move-time').value = currentLessonDisplayTime;
+  }
+  document.getElementById('modal-lesson').classList.remove('open');
+  document.getElementById('modal-move').classList.add('open');
+}
+
+function confirmMove() {
+  const newDate = document.getElementById('move-date').value;
+  const newTime = document.getElementById('move-time').value;
+  if (!newDate || !newTime || !currentLessonKey) return;
+  movedLessons[currentLessonKey] = { date: newDate, time: newTime };
+  // If this lesson was pending a make-up, rescheduling it counts as recovering it:
+  // mark it recovered and drop it out of the "to make up" list automatically.
+  if (getStatus(currentLessonKey) === 'makeup') {
+    lessonStatus[currentLessonKey] = 'recovered';
+  }
+  saveData(); closeMoveModal(); renderCalendar();
+}
+
+function closeMoveModal() {
+  document.getElementById('modal-move').classList.remove('open');
+}
+
+function deleteLesson() {
+  if (!currentLessonKey) return;
+  if (!confirm('Eliminare questa singola lezione? L\'operazione non è reversibile.')) return;
+  deletedLessons.add(currentLessonKey);
+  delete lessonStatus[currentLessonKey];
+  delete movedLessons[currentLessonKey];
+  delete notes[currentLessonKey];
+  saveData(); closeModal(); renderCalendar();
+}
+
+function setLessonStatus(newStatus) {
+  if (!currentLessonKey) return;
+  const current = getStatus(currentLessonKey);
+  if (current === newStatus) {
+    delete lessonStatus[currentLessonKey];
+  } else {
+    lessonStatus[currentLessonKey] = newStatus;
+  }
+  const s = getStatus(currentLessonKey);
+  document.getElementById('status-btn-cancelled').className = s === 'cancelled' ? 'active-cancelled' : '';
+  const btnM = document.getElementById('status-btn-makeup');
+  btnM.className = (s === 'makeup' || s === 'recovered') ? 'active-makeup' : '';
+  btnM.innerHTML = s === 'recovered'
+    ? '<i class="ti ti-refresh"></i> Recuperata (annulla)'
+    : '<i class="ti ti-refresh"></i> Da recuperare';
+  saveData(); renderCalendar();
+}
+function saveNote() {
+  const note = document.getElementById('lesson-note').value.trim();
+  if (note) notes[currentLessonKey] = note;
+  else delete notes[currentLessonKey];
+  saveData(); closeModal(); renderCalendar();
+}
+function closeModal() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
+}
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => {
+    if (e.target === m) {
+      if (m.id === 'modal-move') closeMoveModal();
+      else closeModal();
+    }
+  });
+});
+
+// PWA install prompt
+let _deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'flex';
+});
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'none';
+});
+function installPWA() {
+  if (!_deferredInstallPrompt) return;
+  _deferredInstallPrompt.prompt();
+  _deferredInstallPrompt.userChoice.then(() => {
+    _deferredInstallPrompt = null;
+    document.getElementById('install-btn').style.display = 'none';
+  });
+}
+
+renderCalendar();
+pullFromServerIfNewer();
+</script>
+</body></html>

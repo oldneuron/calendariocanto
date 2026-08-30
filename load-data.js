@@ -11,7 +11,7 @@ export default async () => {
     const store = getStore({ name: "calendario-canto", consistency: "strong" });
     const record = await store.get("data", { type: "json" });
     return new Response(JSON.stringify({ ok: true, record: record || null }), {
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), {

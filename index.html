@@ -736,6 +736,7 @@ const SYNC_SAVE_URL = '/api/save-data';
 const SYNC_LOAD_URL = '/api/load-data';
 let lastSyncedAt = localStorage.getItem('cl_last_synced_at') || null;
 let syncTimer = null;
+let pushInFlight = false;
 
 function setSyncStatus(state) {
   const el = document.getElementById('sync-status');
@@ -751,10 +752,12 @@ function setSyncStatus(state) {
 }
 
 async function pushToServer() {
+  pushInFlight = true;
   try {
     setSyncStatus('syncing');
     const res = await fetch(SYNC_SAVE_URL, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getCurrentData())
     });
@@ -768,12 +771,17 @@ async function pushToServer() {
   } catch (e) {
     console.warn('Sync push fallita:', e);
     setSyncStatus('offline');
+  } finally {
+    pushInFlight = false;
   }
 }
 
 function schedulePush() {
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(pushToServer, 700);
+  syncTimer = setTimeout(() => {
+    syncTimer = null; // il conto alla rovescia è scaduto: non è più "in attesa"
+    pushToServer();
+  }, 700);
 }
 
 // Invio "best effort" con sendBeacon quando la pagina si nasconde o si
@@ -801,13 +809,13 @@ setInterval(() => {
 }, 25000);
 
 async function pullFromServerIfNewer() {
-  // Non sovrascrivere modifiche locali non ancora inviate, né interrompere
-  // l'utente mentre sta modificando qualcosa in un modale.
-  if (syncTimer) return;
+  // Non sovrascrivere modifiche locali non ancora inviate (o in corso di
+  // invio), né interrompere l'utente mentre sta modificando un modale.
+  if (syncTimer || pushInFlight) return;
   if (document.querySelector('.modal-overlay.open')) return;
   try {
     setSyncStatus('syncing');
-    const res = await fetch(SYNC_LOAD_URL);
+    const res = await fetch(SYNC_LOAD_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const { record } = await res.json();
     if (record && record.payload && (!lastSyncedAt || new Date(record.savedAt) > new Date(lastSyncedAt))) {

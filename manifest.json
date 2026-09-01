@@ -4,8 +4,8 @@
   "description": "Gestione lezioni di canto ricorrenti",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#4A1B0C",
-  "theme_color": "#4A1B0C",
+  "background_color": "#EAF3FC",
+  "theme_color": "#2158B0",
   "orientation": "any",
   "icons": [
     {

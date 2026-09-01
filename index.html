@@ -4,9 +4,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calendario Lezioni di Canto</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
 
 <!-- PWA -->
-<meta name="theme-color" content="#4A1B0C">
+<meta name="theme-color" content="#2158B0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lezioni Canto">
@@ -14,10 +17,14 @@
 <link rel="manifest" href="./manifest.json">
 
 <script>
-// Inline SVG icon as data URL (music note on dark background)
+// Inline SVG icon as data URL (music note su sfondo sfumato blu)
 const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#4A1B0C"/>
-  <text x="256" y="360" font-size="300" text-anchor="middle" fill="#FAECE7" font-family="serif">&#9834;</text>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#2D6CDF"/>
+    <stop offset="100%" stop-color="#4FC3F7"/>
+  </linearGradient></defs>
+  <rect width="512" height="512" rx="130" fill="url(#g)"/>
+  <text x="256" y="360" font-size="300" text-anchor="middle" fill="#FFF6EA" font-family="serif">&#9834;</text>
 </svg>`;
 const iconUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(iconSvg)));
 
@@ -35,61 +42,86 @@ if ('serviceWorker' in navigator) {
 </script>
 <style>
   :root {
-    --color-background-primary: #ffffff;
-    --color-background-secondary: #f5f5f4;
-    --color-background-tertiary: #eeede9;
-    --color-text-primary: #1a1a18;
-    --color-text-secondary: #6b6b68;
-    --color-text-tertiary: #9a9a96;
+    --color-background-primary: #fbfdff;
+    --color-background-secondary: #eaf3fc;
+    --color-background-tertiary: #dcebf9;
+    --color-text-primary: #17253a;
+    --color-text-secondary: #5c7a99;
+    --color-text-tertiary: #a8bed4;
     --color-text-danger: #a32d2d;
-    --color-border-tertiary: rgba(0,0,0,0.12);
-    --color-border-secondary: rgba(0,0,0,0.22);
+    --color-border-tertiary: rgba(35,95,165,0.14);
+    --color-border-secondary: rgba(35,95,165,0.26);
     --color-border-danger: #e24b4a;
-    --border-radius-md: 8px;
-    --border-radius-lg: 12px;
+    --border-radius-md: 10px;
+    --border-radius-lg: 18px;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-display: 'Baloo 2', var(--font-sans);
+    --accent-start: #2D6CDF;
+    --accent-end: #4FC3F7;
+    --accent-gradient: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+    --accent-solid: #2158B0;
+    --accent-ink: #123A66;
+    --accent-cream: #E4F1FE;
+    --highlight-start: #FF8A3D;
+    --highlight-end: #FFB238;
+    --highlight-gradient: linear-gradient(135deg, var(--highlight-start), var(--highlight-end));
+    --card-shadow: 0 3px 14px rgba(30,90,180,0.1);
+    --notes-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Ctext x='14' y='46' font-size='30' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AA%3C/text%3E%3Ctext x='84' y='108' font-size='24' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --color-background-primary: #1e1e1c;
-      --color-background-secondary: #2a2a28;
-      --color-background-tertiary: #232321;
-      --color-text-primary: #f0ede6;
-      --color-text-secondary: #a8a8a4;
-      --color-text-tertiary: #6b6b68;
+      --color-background-primary: #101c2c;
+      --color-background-secondary: #142639;
+      --color-background-tertiary: #0c1826;
+      --color-text-primary: #eaf3fc;
+      --color-text-secondary: #a3c0dd;
+      --color-text-tertiary: #5c7a99;
       --color-text-danger: #f09595;
-      --color-border-tertiary: rgba(255,255,255,0.1);
-      --color-border-secondary: rgba(255,255,255,0.2);
+      --color-border-tertiary: rgba(170,210,255,0.1);
+      --color-border-secondary: rgba(170,210,255,0.2);
       --color-border-danger: #e24b4a;
+      --accent-ink: #DCEBFE;
+      --accent-cream: #16324f;
+      --card-shadow: 0 3px 14px rgba(0,0,0,0.35);
+      --notes-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Ctext x='14' y='46' font-size='30' fill='%236FB1FF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AA%3C/text%3E%3Ctext x='84' y='108' font-size='24' fill='%236FB1FF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E");
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: var(--font-sans);
-    background: var(--color-background-tertiary);
+    background-color: var(--color-background-tertiary);
+    background-image: var(--notes-pattern);
     color: var(--color-text-primary);
     min-height: 100vh;
     padding: 1.5rem;
   }
   .container { max-width: 780px; margin: 0 auto; }
   .app-title {
-    font-size: 22px;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-size: 25px;
+    font-weight: 700;
     color: var(--color-text-primary);
     margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
-  .app-title i { font-size: 22px; color: #D85A30; }
+  .title-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent-gradient); flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(33,88,176,0.35);
+  }
+  .title-badge i { font-size: 18px; color: #fff !important; }
+  .toolbar button i { font-size: 14px; }
 
   .year-switcher { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
-  .year-switcher .year-label { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; color: var(--color-text-secondary); background: var(--color-background-secondary); padding: 4px 16px; border-radius: 20px; }
+  .year-switcher .year-label { font-family: var(--font-display); font-size: 13px; font-weight: 700; letter-spacing: 0.02em; color: #fff; background: var(--accent-gradient); padding: 4px 16px; border-radius: 20px; }
   .year-switcher button { width: 26px; height: 26px; border-radius: 50%; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--color-text-secondary); font-size: 12px; transition: background 0.15s; }
   .year-switcher button:hover { background: var(--color-background-secondary); }
 
   .cal-header { display: flex; align-items: center; justify-content: space-between; padding: 0 0 0.75rem; }
-  .cal-title { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+  .cal-title { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--color-text-primary); }
   .cal-nav { display: flex; gap: 6px; }
   .cal-nav button {
     background: var(--color-background-primary);
@@ -127,7 +159,7 @@ if ('serviceWorker' in navigator) {
   }
   .day-cell.day-unavailable .day-num { color: var(--color-text-tertiary); }
   .day-cell.today .day-num {
-    background: #4A1B0C; color: #FAECE7;
+    background: var(--highlight-gradient); color: #fff;
     border-radius: 50%; width: 22px; height: 22px;
     display: flex; align-items: center; justify-content: center;
   }
@@ -157,9 +189,10 @@ if ('serviceWorker' in navigator) {
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-lg);
+    box-shadow: var(--card-shadow);
     padding: 1rem 1.25rem;
   }
-  .sidebar-card h3 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .sidebar-card h3 { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--accent-solid); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
 
   .student-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); cursor: pointer; }
   .student-item:last-child { border-bottom: none; }
@@ -191,9 +224,10 @@ if ('serviceWorker' in navigator) {
     background: var(--color-background-primary);
     border-radius: var(--border-radius-lg);
     border: 0.5px solid var(--color-border-secondary);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
     padding: 1.5rem; width: 320px; max-width: 95vw;
   }
-  .modal h3 { font-size: 16px; font-weight: 500; margin-bottom: 1rem; color: var(--color-text-primary); }
+  .modal h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin-bottom: 1rem; color: var(--accent-solid); }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; }
   .field input, .field select {
@@ -204,15 +238,15 @@ if ('serviceWorker' in navigator) {
     border-radius: var(--border-radius-md);
     padding: 8px 10px; outline: none;
   }
-  .field input:focus, .field select:focus { border-color: #D85A30; box-shadow: 0 0 0 2px rgba(216,90,48,0.15); }
+  .field input:focus, .field select:focus { border-color: var(--accent-solid); box-shadow: 0 0 0 2px rgba(33,88,176,0.15); }
   .modal-actions { display: flex; gap: 8px; margin-top: 1rem; justify-content: flex-end; flex-wrap: wrap; }
   .btn-primary {
-    background: #4A1B0C; color: #FAECE7;
+    background: var(--accent-gradient); color: #fff;
     border: none; border-radius: var(--border-radius-md);
-    padding: 8px 16px; font-size: 13px; font-weight: 500;
-    cursor: pointer; font-family: var(--font-sans);
+    padding: 8px 16px; font-size: 13px; font-weight: 700; font-family: var(--font-display);
+    cursor: pointer; box-shadow: 0 2px 8px rgba(33,88,176,0.3);
   }
-  .btn-primary:hover { background: #3C1509; }
+  .btn-primary:hover { filter: brightness(1.06); }
   .btn-cancel {
     background: none; border: 0.5px solid var(--color-border-secondary);
     border-radius: var(--border-radius-md); padding: 8px 16px;
@@ -239,12 +273,13 @@ if ('serviceWorker' in navigator) {
     border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md);
     background: none; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s;
   }
-  .end-toggle button.active { background: #4A1B0C; color: #FAECE7; border-color: #4A1B0C; }  .end-badge {
+  .end-toggle button.active { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+  .end-badge {
     font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
     background: var(--color-background-secondary); color: var(--color-text-tertiary);
     margin-left: 4px; vertical-align: middle;
   }
-  .end-badge.active-end { background: #FAECE7; color: #4A1B0C; }
+  .end-badge.active-end { background: var(--accent-cream); color: var(--accent-ink); }
   .status-toggle { display: flex; gap: 6px; margin-top: 12px; }
   .status-toggle button {
     flex: 1; padding: 7px 4px; font-size: 12px; font-family: var(--font-sans);
@@ -300,8 +335,8 @@ if ('serviceWorker' in navigator) {
     background: var(--color-background-primary); color: var(--color-text-secondary);
   }
   .toolbar button:hover { background: var(--color-background-secondary); }
-  .toolbar .btn-export { background: #4A1B0C; color: #FAECE7; border-color: #4A1B0C; }
-  .toolbar .btn-export:hover { background: #3C1509; }
+  .toolbar .btn-export { background: var(--accent-gradient); color: #fff; border-color: transparent; font-weight: 600; }
+  .toolbar .btn-export:hover { filter: brightness(1.06); }
   .unsaved-dot {
     width: 7px; height: 7px; border-radius: 50%; background: #EF9F27;
     display: none; flex-shrink: 0;
@@ -317,7 +352,7 @@ if ('serviceWorker' in navigator) {
 <body>
 <div class="container">
   <div class="app-title">
-    <i class="ti ti-music"></i> Calendario Lezioni di Canto
+    <span class="title-badge"><i class="ti ti-music"></i></span> Calendario Lezioni di Canto
     <div class="toolbar">
       <span class="sync-status" id="sync-status"></span>
       <button onclick="pullFromServerIfNewer()" title="Controlla aggiornamenti dal server" style="padding:4px 6px;"><i class="ti ti-refresh"></i></button>

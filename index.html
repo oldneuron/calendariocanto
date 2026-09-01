@@ -445,6 +445,12 @@ if ('serviceWorker' in navigator) {
 <div class="modal-overlay" id="modal-student">
   <div class="modal">
     <h3 id="modal-title">Nuovo allievo</h3>
+    <div class="field">
+      <label>Allievo già esistente</label>
+      <select id="s-picker" onchange="pickExistingStudent()">
+        <option value="">— scegli per compilare nome e telefono (opzionale) —</option>
+      </select>
+    </div>
     <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
     <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567"></div>
     <div class="field"><label>Giorno della settimana</label>
@@ -1441,9 +1447,45 @@ function goToday() {
   renderCalendar();
 }
 
+// Restituisce, deduplicati per nome, tutti gli allievi presenti in
+// qualunque anno scolastico (anche quelli passati), utile per reiscrivere
+// rapidamente un allievo già conosciuto in un nuovo anno.
+function getKnownStudents() {
+  commitActiveYear();
+  const map = new Map();
+  Object.values(schoolYears).forEach(yearData => {
+    (yearData.students || []).forEach(s => {
+      const key = (s.name || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = map.get(key);
+      if (!existing || (s.phone && !existing.phone)) {
+        map.set(key, { name: s.name.trim(), phone: s.phone || '' });
+      }
+    });
+  });
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'it'));
+}
+
+function populateStudentPicker() {
+  const sel = document.getElementById('s-picker');
+  const known = getKnownStudents();
+  sel.innerHTML = '<option value="">— scegli per compilare nome e telefono (opzionale) —</option>' +
+    known.map(k => `<option value="${k.name.replace(/"/g, '&quot;')}" data-phone="${k.phone.replace(/"/g, '&quot;')}">${k.name}${k.phone ? ' · ' + k.phone : ''}</option>`).join('');
+  sel.value = '';
+}
+
+function pickExistingStudent() {
+  const sel = document.getElementById('s-picker');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  document.getElementById('s-name').value = opt.value;
+  document.getElementById('s-phone').value = opt.getAttribute('data-phone') || '';
+}
+
 function openAddStudent() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Nuovo allievo';
+  populateStudentPicker();
   document.getElementById('s-name').value = '';
   document.getElementById('s-phone').value = '';
   document.getElementById('s-day').value = '1';
@@ -1466,6 +1508,7 @@ function editStudent(id) {
   if (!s) return;
   editingId = id;
   document.getElementById('modal-title').textContent = 'Modifica allievo';
+  populateStudentPicker();
   document.getElementById('s-name').value = s.name;
   document.getElementById('s-phone').value = s.phone || '';
   document.getElementById('s-day').value = s.day;

@@ -122,6 +122,10 @@ if ('serviceWorker' in navigator) {
   }
   .day-cell:hover { border-color: var(--color-border-secondary); }
   .day-cell.other-month { background: var(--color-background-tertiary); opacity: 0.5; }
+  .day-cell.day-unavailable {
+    background-image: repeating-linear-gradient(45deg, var(--color-background-tertiary), var(--color-background-tertiary) 6px, var(--color-border-tertiary) 6px, var(--color-border-tertiary) 7px);
+  }
+  .day-cell.day-unavailable .day-num { color: var(--color-text-tertiary); }
   .day-cell.today .day-num {
     background: #4A1B0C; color: #FAECE7;
     border-radius: 50%; width: 22px; height: 22px;
@@ -141,6 +145,11 @@ if ('serviceWorker' in navigator) {
     font-family: var(--font-sans);
   }
   .lesson-pill:hover { opacity: 0.85; }
+  .unavail-pill {
+    background-image: repeating-linear-gradient(45deg, var(--color-background-secondary), var(--color-background-secondary) 4px, var(--color-border-secondary) 4px, var(--color-border-secondary) 5px);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
 
   .sidebar { margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 500px) { .sidebar { grid-template-columns: 1fr; } }
@@ -335,107 +344,35 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 
-  <div class="legend" id="legend"><div class="legend-item"><div class="legend-dot" style="background:#D85A30"></div><span>Patrizia</span><span class="end-badge active-end">dal 1 apr 2026 · fino al 25 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div><span>Laura</span><span class="end-badge active-end">dal 1 mag 2026 · fino al 18 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div><span>Luisa</span><span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div><div class="legend-item"><div class="legend-dot" style="background:#D4537E"></div><span>Emanuela</span><span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div></div>
+  <div class="legend" id="legend"></div>
 
   <div class="weekdays">
     <div class="weekday">Lun</div><div class="weekday">Mar</div><div class="weekday">Mer</div>
     <div class="weekday">Gio</div><div class="weekday">Ven</div><div class="weekday">Sab</div><div class="weekday">Dom</div>
   </div>
-  <div class="days-grid" id="days-grid"><div class="day-cell"><div class="day-num">1</div></div><div class="day-cell"><div class="day-num">2</div></div><div class="day-cell"><div class="day-num">3</div></div><div class="day-cell"><div class="day-num">4</div><div class="lesson-pill" style="background: rgb(251, 234, 240); color: rgb(75, 21, 40); border: 0.5px solid rgb(212, 83, 126);"><span>Emanuela 15:00</span></div><div class="lesson-pill" style="background: rgb(230, 241, 251); color: rgb(4, 44, 83); border: 0.5px solid rgb(55, 138, 221);"><span>Luisa 15:45</span></div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell today"><div class="day-num">5</div></div><div class="day-cell"><div class="day-num">6</div></div><div class="day-cell"><div class="day-num">7</div></div><div class="day-cell"><div class="day-num">8</div></div><div class="day-cell"><div class="day-num">9</div></div><div class="day-cell"><div class="day-num">10</div></div><div class="day-cell"><div class="day-num">11</div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">12</div></div><div class="day-cell"><div class="day-num">13</div></div><div class="day-cell"><div class="day-num">14</div></div><div class="day-cell"><div class="day-num">15</div></div><div class="day-cell"><div class="day-num">16</div></div><div class="day-cell"><div class="day-num">17</div></div><div class="day-cell"><div class="day-num">18</div><div class="lesson-pill" style="background: rgb(251, 234, 240); color: rgb(75, 21, 40); border: 0.5px solid rgb(212, 83, 126);"><span>→ Emanuela 15:00</span></div><div class="lesson-pill" style="background: rgb(230, 241, 251); color: rgb(4, 44, 83); border: 0.5px solid rgb(55, 138, 221);"><span>→ Luisa 15:45</span></div><div class="lesson-pill" style="background: rgb(225, 245, 238); color: rgb(4, 52, 44); border: 0.5px solid rgb(29, 158, 117);"><span>Laura 16:30</span></div><div class="lesson-pill" style="background: rgb(255, 248, 230); color: rgb(122, 80, 0); border: 0.5px solid rgb(239, 159, 39);"><span>↺ Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">19</div></div><div class="day-cell"><div class="day-num">20</div></div><div class="day-cell"><div class="day-num">21</div></div><div class="day-cell"><div class="day-num">22</div></div><div class="day-cell"><div class="day-num">23</div></div><div class="day-cell"><div class="day-num">24</div></div><div class="day-cell"><div class="day-num">25</div><div class="lesson-pill" style="background: rgb(250, 236, 231); color: rgb(74, 27, 12); border: 0.5px solid rgb(216, 90, 48);"><span>· Patrizia 17:30</span></div></div><div class="day-cell"><div class="day-num">26</div></div><div class="day-cell"><div class="day-num">27</div></div><div class="day-cell"><div class="day-num">28</div></div><div class="day-cell"><div class="day-num">29</div></div><div class="day-cell"><div class="day-num">30</div></div><div class="day-cell other-month"><div class="day-num">1</div></div><div class="day-cell other-month"><div class="day-num">2</div></div><div class="day-cell other-month"><div class="day-num">3</div></div><div class="day-cell other-month"><div class="day-num">4</div></div><div class="day-cell other-month"><div class="day-num">5</div></div></div>
+  <div class="days-grid" id="days-grid"></div>
 
   <div class="sidebar">
     <div class="sidebar-card">
       <h3><i class="ti ti-users"></i> Allievi</h3>
-      <div id="students-list"><div class="student-item" onclick="editStudent(1)">
-      <div class="student-avatar" style="background:#FAECE7;color:#4A1B0C;border:1px solid #D85A30">P</div>
-      <div class="student-info">
-        <div class="student-name">Patrizia <span class="end-badge active-end">dal 1 apr 2026 · fino al 25 giu 2026</span></div>
-        <div class="student-time">Giovedì · 17:30 · 60 min</div>
-      </div>
-      <div class="student-dot" style="background:#D85A30"></div>
-    </div><div class="student-item" onclick="editStudent(2)">
-      <div class="student-avatar" style="background:#E1F5EE;color:#04342C;border:1px solid #1D9E75">L</div>
-      <div class="student-info">
-        <div class="student-name">Laura <span class="end-badge active-end">dal 1 mag 2026 · fino al 18 giu 2026</span></div>
-        <div class="student-time">Giovedì · 16:30 · 45 min</div>
-      </div>
-      <div class="student-dot" style="background:#1D9E75"></div>
-    </div><div class="student-item" onclick="editStudent(3)">
-      <div class="student-avatar" style="background:#E6F1FB;color:#042C53;border:1px solid #378ADD">L</div>
-      <div class="student-info">
-        <div class="student-name">Luisa <span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div>
-        <div class="student-time">Giovedì · 15:45 · 45 min</div>
-      </div>
-      <div class="student-dot" style="background:#378ADD"></div>
-    </div><div class="student-item" onclick="editStudent(4)">
-      <div class="student-avatar" style="background:#FBEAF0;color:#4B1528;border:1px solid #D4537E">E</div>
-      <div class="student-info">
-        <div class="student-name">Emanuela <span class="end-badge active-end">dal 30 apr 2026 · fino al 11 giu 2026</span></div>
-        <div class="student-time">Giovedì · 15:00 · 45 min</div>
-      </div>
-      <div class="student-dot" style="background:#D4537E"></div>
-    </div></div>
+      <div id="students-list"></div>
       <button class="add-btn" onclick="openAddStudent()"><i class="ti ti-plus"></i> Aggiungi allievo</button>
       <button class="link-btn" onclick="downloadStudentList()" style="display:block;margin-top:8px;">Scarica elenco allievi (CSV) →</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="sidebar-card">
         <h3><i class="ti ti-calendar-event"></i> Prossime lezioni</h3>
-        <div id="upcoming-list"><div class="upcoming-item">
-      <div class="upcoming-date">11 giu</div>
-      <div class="student-dot" style="background:#1D9E75;flex-shrink:0"></div>
-      <div>
-        <div class="upcoming-name">Laura</div>
-        <div class="upcoming-hour">16:30</div>
-      </div>
-    </div><div class="upcoming-item">
-      <div class="upcoming-date">11 giu</div>
-      <div class="student-dot" style="background:#D85A30;flex-shrink:0"></div>
-      <div>
-        <div class="upcoming-name">Patrizia</div>
-        <div class="upcoming-hour">17:30</div>
-      </div>
-    </div><div class="upcoming-item">
-      <div class="upcoming-date">18 giu</div>
-      <div class="student-dot" style="background:#1D9E75;flex-shrink:0"></div>
-      <div>
-        <div class="upcoming-name">Laura</div>
-        <div class="upcoming-hour">16:30</div>
-      </div>
-    </div><div class="upcoming-item">
-      <div class="upcoming-date">18 giu</div>
-      <div class="student-dot" style="background:#D4537E;flex-shrink:0"></div>
-      <div>
-        <div class="upcoming-name">Emanuela</div>
-        <div class="upcoming-hour">15:00</div>
-      </div>
-    </div><div class="upcoming-item">
-      <div class="upcoming-date">18 giu</div>
-      <div class="student-dot" style="background:#378ADD;flex-shrink:0"></div>
-      <div>
-        <div class="upcoming-name">Luisa</div>
-        <div class="upcoming-hour">15:45</div>
-      </div>
-    </div></div>
+        <div id="upcoming-list"></div>
       </div>
       <div class="sidebar-card">
         <h3><i class="ti ti-refresh"></i> Da recuperare</h3>
-        <div id="makeup-list"><div class="makeup-item">
-      <i class="ti ti-refresh makeup-icon"></i>
-      <div>
-        <div class="makeup-name">Patrizia</div>
-        <div class="makeup-date">18 giu 2026</div>
-      </div>
-      <div class="student-dot" style="background:#D85A30;flex-shrink:0;margin-left:auto"></div>
-    </div><div class="makeup-item">
-      <i class="ti ti-refresh makeup-icon"></i>
-      <div>
-        <div class="makeup-name">Patrizia</div>
-        <div class="makeup-date">28 mag 2026</div>
-      </div>
-      <div class="student-dot" style="background:#D85A30;flex-shrink:0;margin-left:auto"></div>
-    </div></div>
+        <div id="makeup-list"></div>
         <button class="link-btn" onclick="openHistory()">Vedi storico completo →</button>
+      </div>
+      <div class="sidebar-card">
+        <h3><i class="ti ti-calendar-off"></i> Non disponibile</h3>
+        <div id="unavail-list"></div>
+        <button class="add-btn" onclick="openAddUnavailability()"><i class="ti ti-plus"></i> Aggiungi indisponibilità</button>
       </div>
     </div>
   </div>
@@ -502,6 +439,48 @@ if ('serviceWorker' in navigator) {
       <button class="btn-danger" id="delete-btn" onclick="deleteStudent()" style="display:none"><i class="ti ti-trash"></i> Elimina</button>
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
       <button class="btn-primary" onclick="saveStudent()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal indisponibilità -->
+<div class="modal-overlay" id="modal-unavail">
+  <div class="modal">
+    <h3>Nuova indisponibilità</h3>
+    <div class="field">
+      <label>Tipo</label>
+      <div class="end-toggle">
+        <button id="unavail-type-weekly-btn" class="active" onclick="setUnavailType('weekly')">Ogni settimana</button>
+        <button id="unavail-type-date-btn" onclick="setUnavailType('date')">Data specifica</button>
+      </div>
+    </div>
+    <div class="field" id="unavail-day-field">
+      <label>Giorno della settimana</label>
+      <select id="u-day">
+        <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
+        <option value="4">Giovedì</option><option value="5">Venerdì</option><option value="6">Sabato</option><option value="0">Domenica</option>
+      </select>
+    </div>
+    <div class="field" id="unavail-date-field" style="display:none">
+      <label>Data</label>
+      <input type="date" id="u-date">
+    </div>
+    <div class="field">
+      <label>Fascia oraria</label>
+      <div class="end-toggle">
+        <button id="unavail-allday-btn" class="active" onclick="setUnavailAllDay(true)">Tutto il giorno</button>
+        <button id="unavail-range-btn" onclick="setUnavailAllDay(false)">Orario specifico</button>
+      </div>
+    </div>
+    <div id="unavail-time-fields" style="display:none">
+      <div class="field"><label>Dalle</label><input type="time" id="u-start" value="09:00"></div>
+      <div class="field"><label>Alle</label><input type="time" id="u-end" value="13:00"></div>
+    </div>
+    <div class="field"><label>Nota (opzionale)</label><input type="text" id="u-label" placeholder="es. Corso di aggiornamento"></div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="unavail-delete-btn" onclick="deleteUnavailability(editingUnavailId)" style="display:none"><i class="ti ti-trash"></i> Elimina</button>
+      <button class="btn-cancel" onclick="closeModal()">Annulla</button>
+      <button class="btn-primary" onclick="saveUnavailability()">Salva</button>
     </div>
   </div>
 </div>
@@ -717,7 +696,7 @@ function loadData() {
 
 function getCurrentData() {
   commitActiveYear();
-  return { schoolYears, currentSchoolYear };
+  return { schoolYears, currentSchoolYear, unavailability };
 }
 
 let hasUnsavedChanges = false;
@@ -839,6 +818,7 @@ async function pullFromServerIfNewer() {
     const { record } = await res.json();
     if (record && record.payload && (!lastSyncedAt || new Date(record.savedAt) > new Date(lastSyncedAt))) {
       schoolYears = record.payload.schoolYears || schoolYears;
+      unavailability = record.payload.unavailability || unavailability;
       loadActiveYear(record.payload.currentSchoolYear || Object.keys(schoolYears)[0]);
       currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
       localStorage.setItem('cl_data', JSON.stringify(record.payload));
@@ -948,6 +928,7 @@ function importFile(event) {
       // Apply imported data (supports both the new multi-year format and the old flat one)
       const loaded = data.schoolYears ? data : migrateFlatToSchoolYears(data);
       schoolYears = loaded.schoolYears;
+      unavailability = loaded.unavailability || [];
       loadActiveYear(loaded.currentSchoolYear || Object.keys(schoolYears)[0]);
       currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
       saveData();
@@ -973,15 +954,20 @@ window.addEventListener('beforeunload', function(e) {
 let schoolYears = {};
 let currentSchoolYear = null;
 let students, nextId, notes, lessonStatus, movedLessons, deletedLessons;
+// Indisponibilità del docente (giorni/orari in cui non si danno lezioni):
+// non è legata a un singolo anno scolastico, vale per tutti.
+let unavailability = [];
 
 const loaded = loadData();
 if (loaded) {
   schoolYears = loaded.schoolYears;
+  unavailability = loaded.unavailability || [];
   loadActiveYear(loaded.currentSchoolYear);
   currentDate = clampDateToSchoolYear(new Date(), currentSchoolYear);
 } else {
   // Fresh install: start empty from the 2025/2026 school year (1 settembre 2025), no students.
   schoolYears = { '2025': emptyYearData() };
+  unavailability = [];
   loadActiveYear('2025');
   currentDate = new Date(2025, 8, 1);
 }
@@ -1388,6 +1374,18 @@ function renderCalendar() {
     numEl.textContent = cellDate.getDate();
     cell.appendChild(numEl);
 
+    // Indisponibilità (giorni/orari in cui non si danno lezioni)
+    const unavailToday = getUnavailabilityForDate(cellDate);
+    if (unavailToday.some(u => u.allDay)) cell.classList.add('day-unavailable');
+    unavailToday.filter(u => !u.allDay).forEach(u => {
+      const pill = document.createElement('div');
+      pill.className = 'lesson-pill unavail-pill';
+      const range = (u.startTime || '?') + '–' + (u.endTime || '?');
+      pill.innerHTML = `<span><i class="ti ti-ban" style="font-size:10px;"></i> ${range}${u.label ? ' ' + u.label : ''}</span>`;
+      pill.onclick = (e) => { e.stopPropagation(); editUnavailability(u.id); };
+      cell.appendChild(pill);
+    });
+
     const cellStr = cellDate.toDateString();
     const dayLessons = allLessons.filter(l => l.displayDate.toDateString() === cellStr);
     // Sort by time
@@ -1422,6 +1420,7 @@ function renderCalendar() {
   renderStudents();
   renderUpcoming();
   renderMakeup();
+  renderUnavailList();
   updateYearLabel();
   const idx = monthIndexInSchoolYear(currentDate, currentSchoolYear);
   document.getElementById('prev-month-btn').disabled = idx <= 0;
@@ -1553,6 +1552,122 @@ function saveStudent() {
 function deleteStudent() {
   students = students.filter(x => x.id !== editingId);
   saveData(); closeModal(); renderCalendar();
+}
+
+// ---- Indisponibilità (giorni/orari in cui non si danno lezioni) ----
+function toISODateLocal(date) {
+  const p = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+}
+
+// Restituisce le regole di indisponibilità attive in una data specifica
+// (sia quelle ricorrenti ogni settimana sia quelle su una data puntuale).
+function getUnavailabilityForDate(date) {
+  const dow = date.getDay();
+  const iso = toISODateLocal(date);
+  return unavailability.filter(u => (u.kind === 'weekly' && u.day === dow) || (u.kind === 'date' && u.date === iso));
+}
+
+let editingUnavailId = null;
+let currentUnavailType = 'weekly';
+let currentUnavailAllDay = true;
+
+function setUnavailType(type) {
+  currentUnavailType = type;
+  document.getElementById('unavail-type-weekly-btn').classList.toggle('active', type === 'weekly');
+  document.getElementById('unavail-type-date-btn').classList.toggle('active', type === 'date');
+  document.getElementById('unavail-day-field').style.display = type === 'weekly' ? 'block' : 'none';
+  document.getElementById('unavail-date-field').style.display = type === 'date' ? 'block' : 'none';
+}
+
+function setUnavailAllDay(allDay) {
+  currentUnavailAllDay = allDay;
+  document.getElementById('unavail-allday-btn').classList.toggle('active', allDay);
+  document.getElementById('unavail-range-btn').classList.toggle('active', !allDay);
+  document.getElementById('unavail-time-fields').style.display = allDay ? 'none' : 'block';
+}
+
+function openAddUnavailability() {
+  editingUnavailId = null;
+  document.getElementById('unavail-delete-btn').style.display = 'none';
+  document.getElementById('u-day').value = String(currentDate.getDay() || 1);
+  document.getElementById('u-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('u-start').value = '09:00';
+  document.getElementById('u-end').value = '13:00';
+  document.getElementById('u-label').value = '';
+  setUnavailType('weekly');
+  setUnavailAllDay(true);
+  document.getElementById('modal-unavail').classList.add('open');
+}
+
+function editUnavailability(id) {
+  const u = unavailability.find(x => x.id === id);
+  if (!u) return;
+  editingUnavailId = id;
+  document.getElementById('unavail-delete-btn').style.display = 'block';
+  if (u.kind === 'weekly') document.getElementById('u-day').value = String(u.day);
+  else document.getElementById('u-date').value = u.date;
+  document.getElementById('u-start').value = u.startTime || '09:00';
+  document.getElementById('u-end').value = u.endTime || '13:00';
+  document.getElementById('u-label').value = u.label || '';
+  setUnavailType(u.kind);
+  setUnavailAllDay(!!u.allDay);
+  document.getElementById('modal-unavail').classList.add('open');
+}
+
+function saveUnavailability() {
+  const allDay = currentUnavailAllDay;
+  const label = document.getElementById('u-label').value.trim();
+  const rec = {
+    id: editingUnavailId || ('u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+    kind: currentUnavailType,
+    day: currentUnavailType === 'weekly' ? parseInt(document.getElementById('u-day').value) : null,
+    date: currentUnavailType === 'date' ? document.getElementById('u-date').value : null,
+    allDay,
+    startTime: allDay ? null : document.getElementById('u-start').value,
+    endTime: allDay ? null : document.getElementById('u-end').value,
+    label: label || null,
+  };
+  if (rec.kind === 'date' && !rec.date) { alert('Seleziona una data.'); return; }
+  if (editingUnavailId) {
+    const idx = unavailability.findIndex(x => x.id === editingUnavailId);
+    if (idx !== -1) unavailability[idx] = rec;
+  } else {
+    unavailability.push(rec);
+  }
+  saveData(); closeModal(); renderCalendar();
+}
+
+function deleteUnavailability(id) {
+  unavailability = unavailability.filter(x => x.id !== id);
+  saveData(); closeModal(); renderCalendar();
+}
+
+function renderUnavailList() {
+  const el = document.getElementById('unavail-list');
+  if (!unavailability.length) { el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessuna indisponibilità impostata.</p>'; return; }
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  const sorted = unavailability.slice().sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'weekly' ? -1 : 1;
+    if (a.kind === 'weekly') return a.day - b.day;
+    return a.date.localeCompare(b.date);
+  });
+  el.innerHTML = sorted.map(u => {
+    let when;
+    if (u.kind === 'weekly') {
+      when = DAYS_IT[u.day] + ' (ogni settimana)';
+    } else {
+      const d = new Date(u.date + 'T12:00:00');
+      when = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    const time = u.allDay ? 'Tutto il giorno' : `${u.startTime || '?'}–${u.endTime || '?'}`;
+    return `<div class="student-item" onclick="editUnavailability('${u.id}')">
+      <div class="student-info">
+        <div class="student-name">${when}${u.label ? ` <span class="end-badge active-end">${u.label}</span>` : ''}</div>
+        <div class="student-time">${time}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 let currentLessonStudent = null;

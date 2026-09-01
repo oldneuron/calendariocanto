@@ -376,6 +376,7 @@ if ('serviceWorker' in navigator) {
       <div class="student-dot" style="background:#D4537E"></div>
     </div></div>
       <button class="add-btn" onclick="openAddStudent()"><i class="ti ti-plus"></i> Aggiungi allievo</button>
+      <button class="link-btn" onclick="downloadStudentList()" style="display:block;margin-top:8px;">Scarica elenco allievi (CSV) →</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="sidebar-card">
@@ -445,6 +446,7 @@ if ('serviceWorker' in navigator) {
   <div class="modal">
     <h3 id="modal-title">Nuovo allievo</h3>
     <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
+    <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567"></div>
     <div class="field"><label>Giorno della settimana</label>
       <select id="s-day">
         <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
@@ -898,6 +900,28 @@ async function exportFile() {
   document.getElementById('unsaved-dot').classList.remove('visible');
 }
 
+// Elenco allievi con recapiti, in un file CSV apribile con Excel/Numbers/
+// Fogli Google (separatore ";" e BOM per far riconoscere gli accenti).
+function downloadStudentList() {
+  if (!students.length) { alert('Nessun allievo da esportare.'); return; }
+  const escapeCsv = (v) => {
+    const s = String(v ?? '');
+    return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = ['Nome', 'Telefono', 'Giorno', 'Orario', 'Durata (min)'];
+  const rows = students
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'it'))
+    .map(s => [s.name, s.phone || '', DAYS_IT[s.day], s.time, s.duration]);
+  const csv = '\uFEFF' + [header, ...rows].map(r => r.map(escapeCsv).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'elenco-allievi.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function importFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1161,6 +1185,7 @@ function renderStudents() {
       <div class="student-info">
         <div class="student-name">${s.name}${lbl ? ` <span class="end-badge active-end">${lbl}</span>` : ''}</div>
         <div class="student-time">${DAYS_IT[s.day]} · ${s.time} · ${s.duration} min</div>
+        ${s.phone ? `<div class="student-time"><i class="ti ti-phone" style="font-size:10px;"></i> ${s.phone}</div>` : ''}
       </div>
       <div class="student-dot" style="background:${c.dot}"></div>
     </div>`;
@@ -1420,6 +1445,7 @@ function openAddStudent() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Nuovo allievo';
   document.getElementById('s-name').value = '';
+  document.getElementById('s-phone').value = '';
   document.getElementById('s-day').value = '1';
   document.getElementById('s-time').value = '10:00';
   document.getElementById('s-duration').value = '60';
@@ -1441,6 +1467,7 @@ function editStudent(id) {
   editingId = id;
   document.getElementById('modal-title').textContent = 'Modifica allievo';
   document.getElementById('s-name').value = s.name;
+  document.getElementById('s-phone').value = s.phone || '';
   document.getElementById('s-day').value = s.day;
   document.getElementById('s-time').value = s.time;
   document.getElementById('s-duration').value = s.duration;
@@ -1464,8 +1491,10 @@ function saveStudent() {
   const endDate = endMode === 'date' ? document.getElementById('s-enddate').value : null;
   const endCount = endMode === 'count' ? parseInt(document.getElementById('s-endcount').value) || null : null;
   const startDate = document.getElementById('s-startdate').value || null;
+  const phone = document.getElementById('s-phone').value.trim();
   const data = {
-    name, day: parseInt(document.getElementById('s-day').value),
+    name, phone: phone || null,
+    day: parseInt(document.getElementById('s-day').value),
     time: document.getElementById('s-time').value,
     duration: parseInt(document.getElementById('s-duration').value),
     startDate, endMode, endDate, endCount

@@ -1167,8 +1167,19 @@ function computeLessonCounts(s) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let previste = 0, erogate = 0, sospese = 0;
 
+  // Se l'allievo non ha una data di inizio registrata (record più vecchi),
+  // si parte comunque dal 1° settembre dell'anno scolastico attivo: le
+  // lezioni sono già considerate attive fin da allora (vedi isLessonActive).
+  let countStart = null;
   if (s.startDate) {
-    const cur = new Date(s.startDate + 'T00:00:00');
+    countStart = new Date(s.startDate + 'T00:00:00');
+  } else {
+    const sy = parseInt(currentSchoolYear, 10);
+    if (!isNaN(sy)) countStart = new Date(sy, 8, 1);
+  }
+
+  if (countStart) {
+    const cur = new Date(countStart);
     while (cur.getDay() !== s.day) cur.setDate(cur.getDate() + 1);
     while (cur <= today) {
       if (isLessonActive(s, cur)) {
@@ -1205,7 +1216,9 @@ function computeLessonCounts(s) {
 
 function lessonCountBadge(s) {
   const { previste, erogate, sospese } = computeLessonCounts(s);
-  if (previste === 0) return '';
+  if (previste === 0) {
+    return `<span class="end-badge" title="Nessuna lezione ancora conteggiata (le lezioni future non vengono contate finché non arriva la loro data)">0 lezioni finora</span>`;
+  }
   const cls = sospese > 0 ? 'badge-pending' : 'badge-ok';
   const text = sospese > 0 ? `${erogate}/${previste} · ${sospese} da recuperare` : `${erogate}/${previste} lezioni`;
   const title = `${erogate} erogate su ${previste} previste finora` + (sospese ? `, ${sospese} da recuperare` : '');

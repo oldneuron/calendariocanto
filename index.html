@@ -228,6 +228,19 @@ if ('serviceWorker' in navigator) {
     padding: 1.5rem; width: 320px; max-width: 95vw;
   }
   .modal h3 { font-family: var(--font-display); font-size: 18px; font-weight: 700; margin-bottom: 1rem; color: var(--accent-solid); }
+  .modal-wide { width: 400px; }
+  .holidays-subtitle { font-size: 12.5px; color: var(--color-text-secondary); margin: -8px 0 14px; }
+  .holidays-select-all { border-bottom: 0.5px solid var(--color-border-tertiary); padding-bottom: 10px; margin-bottom: 2px; }
+  .holidays-list { max-height: 340px; overflow-y: auto; margin: 0 -4px; padding: 0 4px 4px; }
+  .holiday-group-title { font-family: var(--font-display); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); margin: 14px 0 4px; }
+  .holiday-group-title:first-child { margin-top: 0; }
+  .holiday-row { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .holiday-row:hover { background: var(--color-background-secondary); }
+  .holiday-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-solid); flex-shrink: 0; cursor: pointer; }
+  .holiday-row .holiday-name { flex: 1; color: var(--color-text-primary); }
+  .holiday-row .holiday-date { font-size: 11.5px; color: var(--color-text-tertiary); white-space: nowrap; }
+  .holiday-row.added { opacity: 0.6; }
+  .holiday-row.added .holiday-date { color: #1D9E75; font-weight: 600; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; font-weight: 500; }
   .field input, .field select {
@@ -408,6 +421,7 @@ if ('serviceWorker' in navigator) {
         <h3><i class="ti ti-calendar-off"></i> Non disponibile</h3>
         <div id="unavail-list"></div>
         <button class="add-btn" onclick="openAddUnavailability()"><i class="ti ti-plus"></i> Aggiungi indisponibilità</button>
+        <button class="add-btn" onclick="openHolidaysModal()" style="margin-top:6px;"><i class="ti ti-calendar-event"></i> Festività italiane</button>
       </div>
     </div>
   </div>
@@ -516,6 +530,25 @@ if ('serviceWorker' in navigator) {
       <button class="btn-danger" id="unavail-delete-btn" onclick="deleteUnavailability(editingUnavailId)" style="display:none"><i class="ti ti-trash"></i> Elimina</button>
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
       <button class="btn-primary" onclick="saveUnavailability()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal festività italiane -->
+<div class="modal-overlay" id="modal-holidays">
+  <div class="modal modal-wide">
+    <h3>Festività italiane</h3>
+    <p id="holidays-subtitle" class="holidays-subtitle"></p>
+    <div class="field holidays-select-all">
+      <label class="holiday-row">
+        <input type="checkbox" id="holidays-select-all-cb" onchange="toggleAllHolidays(this.checked)">
+        <span>Seleziona tutte</span>
+      </label>
+    </div>
+    <div id="holidays-list" class="holidays-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
+      <button class="btn-primary" id="holidays-add-btn" onclick="addSelectedHolidays()">Aggiungi selezionate</button>
     </div>
   </div>
 </div>
@@ -1703,6 +1736,146 @@ function renderUnavailList() {
       </div>
     </div>`;
   }).join('');
+}
+
+// --- Festività italiane ------------------------------------------------
+// Calcola la data di Pasqua (algoritmo di Gauss/Meeus, calendario gregoriano)
+function computeEasterDate(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = marzo, 4 = aprile
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+// Festività civili (Repubblica Italiana) e religiose cattoliche a data fissa.
+// yearOffset: 0 = cade nel primo anno solare dell'anno scolastico (set-dic),
+//             1 = cade nel secondo anno solare (gen-ago).
+const ITALIAN_HOLIDAYS_CIVIL = [
+  { key: 'capodanno', name: 'Capodanno', month: 1, day: 1, yearOffset: 1 },
+  { key: 'liberazione', name: 'Festa della Liberazione', month: 4, day: 25, yearOffset: 1 },
+  { key: 'lavoratori', name: 'Festa dei Lavoratori', month: 5, day: 1, yearOffset: 1 },
+  { key: 'repubblica', name: 'Festa della Repubblica', month: 6, day: 2, yearOffset: 1 },
+];
+const ITALIAN_HOLIDAYS_RELIGIOUS_FIXED = [
+  { key: 'ognissanti', name: 'Tutti i Santi', month: 11, day: 1, yearOffset: 0 },
+  { key: 'immacolata', name: 'Immacolata Concezione', month: 12, day: 8, yearOffset: 0 },
+  { key: 'natale', name: 'Natale', month: 12, day: 25, yearOffset: 0 },
+  { key: 'stefano', name: 'Santo Stefano', month: 12, day: 26, yearOffset: 0 },
+  { key: 'epifania', name: 'Epifania', month: 1, day: 6, yearOffset: 1 },
+  { key: 'ferragosto', name: 'Assunzione di Maria (Ferragosto)', month: 8, day: 15, yearOffset: 1 },
+];
+
+// Restituisce l'elenco delle festività per l'anno scolastico che inizia in startYear,
+// ordinate cronologicamente, con data ISO già calcolata (Pasqua e Pasquetta incluse).
+function buildItalianHolidays(startYear) {
+  const list = [];
+  const pad = n => String(n).padStart(2, '0');
+  ITALIAN_HOLIDAYS_CIVIL.forEach(h => {
+    const year = startYear + h.yearOffset;
+    list.push({ key: h.key, name: h.name, group: 'civile', date: `${year}-${pad(h.month)}-${pad(h.day)}` });
+  });
+  ITALIAN_HOLIDAYS_RELIGIOUS_FIXED.forEach(h => {
+    const year = startYear + h.yearOffset;
+    list.push({ key: h.key, name: h.name, group: 'religiosa', date: `${year}-${pad(h.month)}-${pad(h.day)}` });
+  });
+  const easter = computeEasterDate(startYear + 1);
+  const easterMonday = new Date(easter);
+  easterMonday.setDate(easter.getDate() + 1);
+  list.push({ key: 'pasqua', name: 'Pasqua', group: 'religiosa', date: `${easter.getFullYear()}-${pad(easter.getMonth() + 1)}-${pad(easter.getDate())}` });
+  list.push({ key: 'pasquetta', name: "Lunedì dell'Angelo (Pasquetta)", group: 'religiosa', date: `${easterMonday.getFullYear()}-${pad(easterMonday.getMonth() + 1)}-${pad(easterMonday.getDate())}` });
+  list.sort((a, b) => a.date.localeCompare(b.date));
+  return list;
+}
+
+function openHolidaysModal() {
+  document.getElementById('modal-holidays').classList.add('open');
+  renderHolidaysModalList();
+}
+
+function renderHolidaysModalList() {
+  const startYear = parseInt(currentSchoolYear, 10);
+  const endYear = startYear + 1;
+  document.getElementById('holidays-subtitle').textContent =
+    `Anno scolastico ${startYear}/${endYear} — spuntale una alla volta oppure tutte insieme.`;
+
+  const holidays = buildItalianHolidays(startYear);
+  const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  const fmt = iso => {
+    const d = new Date(iso + 'T12:00:00');
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+  const alreadyPresent = iso => unavailability.some(u => u.kind === 'date' && u.date === iso);
+
+  const groups = [
+    { key: 'civile', title: 'Festività ufficiali della Repubblica' },
+    { key: 'religiosa', title: 'Festività religiose cattoliche' },
+  ];
+
+  let html = '';
+  groups.forEach(g => {
+    const items = holidays.filter(h => h.group === g.key);
+    if (!items.length) return;
+    html += `<div class="holiday-group-title">${g.title}</div>`;
+    items.forEach(h => {
+      const added = alreadyPresent(h.date);
+      html += `<label class="holiday-row${added ? ' added' : ''}">
+        <input type="checkbox" class="holiday-cb" data-key="${h.key}" data-name="${h.name.replace(/"/g, '&quot;')}" data-date="${h.date}" ${added ? 'checked disabled' : ''} onchange="updateHolidaysSelectAllState()">
+        <span class="holiday-name">${h.name}</span>
+        <span class="holiday-date">${added ? '✓ già aggiunta' : fmt(h.date)}</span>
+      </label>`;
+    });
+  });
+  document.getElementById('holidays-list').innerHTML = html;
+  document.getElementById('holidays-select-all-cb').checked = false;
+  updateHolidaysAddButtonLabel();
+}
+
+function toggleAllHolidays(checked) {
+  document.querySelectorAll('#holidays-list .holiday-cb:not(:disabled)').forEach(cb => { cb.checked = checked; });
+  updateHolidaysAddButtonLabel();
+}
+
+function updateHolidaysSelectAllState() {
+  const boxes = Array.from(document.querySelectorAll('#holidays-list .holiday-cb:not(:disabled)'));
+  const allChecked = boxes.length > 0 && boxes.every(cb => cb.checked);
+  document.getElementById('holidays-select-all-cb').checked = allChecked;
+  updateHolidaysAddButtonLabel();
+}
+
+function updateHolidaysAddButtonLabel() {
+  const n = document.querySelectorAll('#holidays-list .holiday-cb:not(:disabled):checked').length;
+  document.getElementById('holidays-add-btn').textContent = n > 0 ? `Aggiungi selezionate (${n})` : 'Aggiungi selezionate';
+}
+
+function addSelectedHolidays() {
+  const checked = Array.from(document.querySelectorAll('#holidays-list .holiday-cb:not(:disabled):checked'));
+  if (!checked.length) { closeModal(); return; }
+  checked.forEach(cb => {
+    unavailability.push({
+      id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      kind: 'date',
+      day: null,
+      date: cb.dataset.date,
+      allDay: true,
+      startTime: null,
+      endTime: null,
+      label: cb.dataset.name,
+    });
+  });
+  saveData();
+  closeModal();
+  renderCalendar();
 }
 
 let currentLessonStudent = null;

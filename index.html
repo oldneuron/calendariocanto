@@ -293,6 +293,8 @@ if ('serviceWorker' in navigator) {
     margin-left: 4px; vertical-align: middle;
   }
   .end-badge.active-end { background: var(--accent-cream); color: var(--accent-ink); }
+  .end-badge.badge-ok { background: #E7F7EE; color: #0B6B3A; }
+  .end-badge.badge-pending { background: #FFF8E6; color: #7a5000; font-weight: 600; }
   .status-toggle { display: flex; gap: 6px; margin-top: 12px; }
   .status-toggle button {
     flex: 1; padding: 7px 4px; font-size: 12px; font-family: var(--font-sans);
@@ -1142,6 +1144,68 @@ function periodLabel(s) {
   return null;
 }
 
+// Classifica un'occorrenza di lezione (dato il suo origKey) in:
+// 'skip' (annullata senza recupero: non dovuta, non conta),
+// 'pending' (da recuperare), 'delivered' (svolta, oppure recuperata altrove).
+function occurrenceOutcome(origKey) {
+  const st = getStatus(origKey);
+  if (st === 'cancelled') return 'skip';
+  if (st === 'makeup') return 'pending';
+  return 'delivered';
+}
+
+// Conteggio lezioni previste / erogate / in sospeso per un allievo, calcolato
+// fino ad oggi. "In sospeso" usa la stessa fonte dati della scheda
+// "Da recuperare", così i due conteggi restano sempre coerenti tra loro.
+function computeLessonCounts(s) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let previste = 0, erogate = 0, sospese = 0;
+
+  if (s.startDate) {
+    const cur = new Date(s.startDate + 'T00:00:00');
+    while (cur.getDay() !== s.day) cur.setDate(cur.getDate() + 1);
+    while (cur <= today) {
+      if (isLessonActive(s, cur)) {
+        const origKey = cur.toDateString() + '_' + s.id;
+        if (!deletedLessons.has(origKey) && !movedLessons[origKey]) {
+          const outcome = occurrenceOutcome(origKey);
+          if (outcome !== 'skip') { previste++; if (outcome === 'delivered') erogate++; }
+        }
+      }
+      cur.setDate(cur.getDate() + 7);
+    }
+  }
+
+  // Lezioni spostate: contano (se dovute) alla nuova data, quando già passata.
+  Object.entries(movedLessons).forEach(([origKey, mv]) => {
+    if (parseInt(origKey.split('_')[1]) !== s.id) return;
+    if (deletedLessons.has(origKey)) return;
+    const newDate = new Date(mv.date + 'T00:00:00');
+    if (newDate > today) return;
+    const outcome = occurrenceOutcome(origKey);
+    if (outcome !== 'skip') { previste++; if (outcome === 'delivered') erogate++; }
+  });
+
+  // "In sospeso": stessa fonte della scheda "Da recuperare" (scansione diretta
+  // di lessonStatus), per garanzia assoluta di coerenza tra i due conteggi.
+  Object.entries(lessonStatus).forEach(([key, status]) => {
+    if (status !== 'makeup') return;
+    if (parseInt(key.split('_')[1]) !== s.id) return;
+    sospese++;
+  });
+
+  return { previste, erogate, sospese };
+}
+
+function lessonCountBadge(s) {
+  const { previste, erogate, sospese } = computeLessonCounts(s);
+  if (previste === 0) return '';
+  const cls = sospese > 0 ? 'badge-pending' : 'badge-ok';
+  const text = sospese > 0 ? `${erogate}/${previste} · ${sospese} da recuperare` : `${erogate}/${previste} lezioni`;
+  const title = `${erogate} erogate su ${previste} previste finora` + (sospese ? `, ${sospese} da recuperare` : '');
+  return `<span class="end-badge ${cls}" title="${title}">${text}</span>`;
+}
+
 function setEndMode(mode) {
   currentEndMode = mode;
   ['never','date','count'].forEach(m => {
@@ -1229,7 +1293,7 @@ function renderLegend() {
   document.getElementById('legend').innerHTML = students.map((s, i) => {
     const c = getColor(i);
     const lbl = periodLabel(s);
-    return `<div class="legend-item"><div class="legend-dot" style="background:${c.dot}"></div><span>${s.name.split(' ')[0]}</span>${lbl ? `<span class="end-badge active-end">${lbl}</span>` : ''}</div>`;
+    return `<div class="legend-item"><div class="legend-dot" style="background:${c.dot}"></div><span>${s.name.split(' ')[0]}</span>${lbl ? `<span class="end-badge active-end">${lbl}</span>` : ''}${lessonCountBadge(s)}</div>`;
   }).join('');
 }
 

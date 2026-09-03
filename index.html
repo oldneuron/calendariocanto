@@ -496,13 +496,14 @@ if ('serviceWorker' in navigator) {
 
 <!-- Modal indisponibilità -->
 <div class="modal-overlay" id="modal-unavail">
-  <div class="modal">
+  <div class="modal modal-wide">
     <h3>Nuova indisponibilità</h3>
     <div class="field">
       <label>Tipo</label>
       <div class="end-toggle">
         <button id="unavail-type-weekly-btn" class="active" onclick="setUnavailType('weekly')">Ogni settimana</button>
         <button id="unavail-type-date-btn" onclick="setUnavailType('date')">Data specifica</button>
+        <button id="unavail-type-period-btn" onclick="setUnavailType('period')">Periodo</button>
       </div>
     </div>
     <div class="field" id="unavail-day-field">
@@ -515,6 +516,11 @@ if ('serviceWorker' in navigator) {
     <div class="field" id="unavail-date-field" style="display:none">
       <label>Data</label>
       <input type="date" id="u-date">
+    </div>
+    <div id="unavail-period-field" style="display:none">
+      <div class="field"><label>Dal</label><input type="date" id="u-period-start"></div>
+      <div class="field"><label>Al</label><input type="date" id="u-period-end"></div>
+      <p class="holidays-subtitle" style="margin-top:-6px;">Utile per malattie o vacanze: blocca tutti i giorni compresi nel periodo.</p>
     </div>
     <div class="field">
       <label>Fascia oraria</label>
@@ -1697,7 +1703,11 @@ function toISODateLocal(date) {
 function getUnavailabilityForDate(date) {
   const dow = date.getDay();
   const iso = toISODateLocal(date);
-  return unavailability.filter(u => (u.kind === 'weekly' && u.day === dow) || (u.kind === 'date' && u.date === iso));
+  return unavailability.filter(u =>
+    (u.kind === 'weekly' && u.day === dow) ||
+    (u.kind === 'date' && u.date === iso) ||
+    (u.kind === 'period' && u.periodStart && u.periodEnd && iso >= u.periodStart && iso <= u.periodEnd)
+  );
 }
 
 let editingUnavailId = null;
@@ -1708,8 +1718,10 @@ function setUnavailType(type) {
   currentUnavailType = type;
   document.getElementById('unavail-type-weekly-btn').classList.toggle('active', type === 'weekly');
   document.getElementById('unavail-type-date-btn').classList.toggle('active', type === 'date');
+  document.getElementById('unavail-type-period-btn').classList.toggle('active', type === 'period');
   document.getElementById('unavail-day-field').style.display = type === 'weekly' ? 'block' : 'none';
   document.getElementById('unavail-date-field').style.display = type === 'date' ? 'block' : 'none';
+  document.getElementById('unavail-period-field').style.display = type === 'period' ? 'block' : 'none';
 }
 
 function setUnavailAllDay(allDay) {
@@ -1724,6 +1736,8 @@ function openAddUnavailability() {
   document.getElementById('unavail-delete-btn').style.display = 'none';
   document.getElementById('u-day').value = String(currentDate.getDay() || 1);
   document.getElementById('u-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('u-period-start').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('u-period-end').value = new Date().toISOString().slice(0, 10);
   document.getElementById('u-start').value = '09:00';
   document.getElementById('u-end').value = '13:00';
   document.getElementById('u-label').value = '';
@@ -1738,7 +1752,11 @@ function editUnavailability(id) {
   editingUnavailId = id;
   document.getElementById('unavail-delete-btn').style.display = 'block';
   if (u.kind === 'weekly') document.getElementById('u-day').value = String(u.day);
-  else document.getElementById('u-date').value = u.date;
+  else if (u.kind === 'date') document.getElementById('u-date').value = u.date;
+  else if (u.kind === 'period') {
+    document.getElementById('u-period-start').value = u.periodStart;
+    document.getElementById('u-period-end').value = u.periodEnd;
+  }
   document.getElementById('u-start').value = u.startTime || '09:00';
   document.getElementById('u-end').value = u.endTime || '13:00';
   document.getElementById('u-label').value = u.label || '';
@@ -1755,12 +1773,18 @@ function saveUnavailability() {
     kind: currentUnavailType,
     day: currentUnavailType === 'weekly' ? parseInt(document.getElementById('u-day').value) : null,
     date: currentUnavailType === 'date' ? document.getElementById('u-date').value : null,
+    periodStart: currentUnavailType === 'period' ? document.getElementById('u-period-start').value : null,
+    periodEnd: currentUnavailType === 'period' ? document.getElementById('u-period-end').value : null,
     allDay,
     startTime: allDay ? null : document.getElementById('u-start').value,
     endTime: allDay ? null : document.getElementById('u-end').value,
     label: label || null,
   };
   if (rec.kind === 'date' && !rec.date) { alert('Seleziona una data.'); return; }
+  if (rec.kind === 'period') {
+    if (!rec.periodStart || !rec.periodEnd) { alert('Seleziona data di inizio e fine del periodo.'); return; }
+    if (rec.periodEnd < rec.periodStart) { alert('La data di fine deve essere successiva (o uguale) alla data di inizio.'); return; }
+  }
   if (editingUnavailId) {
     const idx = unavailability.findIndex(x => x.id === editingUnavailId);
     if (idx !== -1) unavailability[idx] = rec;
@@ -1779,15 +1803,25 @@ function renderUnavailList() {
   const el = document.getElementById('unavail-list');
   if (!unavailability.length) { el.innerHTML = '<p style="font-size:13px;color:var(--color-text-tertiary);padding:8px 0;">Nessuna indisponibilità impostata.</p>'; return; }
   const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+  const sortKey = u => u.kind === 'weekly' ? null : (u.kind === 'date' ? u.date : u.periodStart);
   const sorted = unavailability.slice().sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'weekly' ? -1 : 1;
+    if (a.kind !== b.kind && (a.kind === 'weekly' || b.kind === 'weekly')) return a.kind === 'weekly' ? -1 : 1;
     if (a.kind === 'weekly') return a.day - b.day;
-    return a.date.localeCompare(b.date);
+    return sortKey(a).localeCompare(sortKey(b));
   });
   el.innerHTML = sorted.map(u => {
     let when;
     if (u.kind === 'weekly') {
       when = DAYS_IT[u.day] + ' (ogni settimana)';
+    } else if (u.kind === 'period') {
+      const ds = new Date(u.periodStart + 'T12:00:00');
+      const de = new Date(u.periodEnd + 'T12:00:00');
+      const sameYear = ds.getFullYear() === de.getFullYear();
+      const sameMonth = sameYear && ds.getMonth() === de.getMonth();
+      const startStr = sameMonth
+        ? `${ds.getDate()}`
+        : (sameYear ? `${ds.getDate()} ${months[ds.getMonth()]}` : `${ds.getDate()} ${months[ds.getMonth()]} ${ds.getFullYear()}`);
+      when = `${startStr} – ${de.getDate()} ${months[de.getMonth()]} ${de.getFullYear()}`;
     } else {
       const d = new Date(u.date + 'T12:00:00');
       when = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;

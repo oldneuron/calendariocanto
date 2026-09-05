@@ -1,4 +1,4 @@
-const CACHE = 'canto-v11';
+const CACHE = 'canto-v12';
 const PRECACHE = [
   './',
   './index.html',

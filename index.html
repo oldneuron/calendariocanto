@@ -66,6 +66,10 @@ if ('serviceWorker' in navigator) {
     --highlight-end: #FFB238;
     --highlight-gradient: linear-gradient(135deg, var(--highlight-start), var(--highlight-end));
     --card-shadow: 0 3px 14px rgba(30,90,180,0.1);
+    --status-color-confirmed: #1D9E75;
+    --status-color-moved: #EF9F27;
+    --status-color-attention: #e24b4a;
+    --status-color-unavailable: #9AA3AF;
     --notes-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Ctext x='14' y='46' font-size='30' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AA%3C/text%3E%3Ctext x='84' y='108' font-size='24' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
@@ -156,8 +160,14 @@ if ('serviceWorker' in navigator) {
   .day-cell.other-month { background: var(--color-background-tertiary); opacity: 0.5; }
   .day-cell.day-unavailable {
     background-image: repeating-linear-gradient(45deg, var(--color-background-tertiary), var(--color-background-tertiary) 6px, var(--color-border-tertiary) 6px, var(--color-border-tertiary) 7px);
+    position: relative;
   }
   .day-cell.day-unavailable .day-num { color: var(--color-text-tertiary); }
+  .day-cell.day-unavailable::after {
+    content: ''; position: absolute; top: 6px; right: 6px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--status-color-unavailable); box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+  }
   .day-cell.today .day-num {
     background: var(--highlight-gradient); color: #fff;
     border-radius: 50%; width: 22px; height: 22px;
@@ -348,6 +358,18 @@ if ('serviceWorker' in navigator) {
   .slot-chip-more { background: none; border-style: dashed; color: var(--color-text-tertiary); }
   .slot-hint { font-size: 12px; color: var(--color-text-tertiary); }
   .slot-hint-warn { color: #7a5000; }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+  }
+  .status-legend-panel {
+    display: flex; flex-direction: column; gap: 7px;
+    background: var(--color-background-secondary); border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md); padding: 10px 14px; margin: -4px 0 10px;
+  }
+  .status-legend-item { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--color-text-secondary); }
+  .status-legend-item .status-dot { width: 9px; height: 9px; }
   .end-badge {
     font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
     background: var(--color-background-secondary); color: var(--color-text-tertiary);
@@ -458,6 +480,13 @@ if ('serviceWorker' in navigator) {
   <div class="legend" id="legend"></div>
   <div class="cal-filters" id="cal-filters">
     <button class="filter-toggle-btn" id="hide-empty-btn" onclick="toggleHideEmptyDays()"><i class="ti ti-eye-off"></i> Solo giorni con lezioni</button>
+    <button class="filter-toggle-btn" id="status-legend-btn" onclick="toggleStatusLegend()"><i class="ti ti-info-circle"></i> Legenda stati</button>
+  </div>
+  <div class="status-legend-panel" id="status-legend-panel" style="display:none">
+    <div class="status-legend-item"><span class="status-dot" style="background:var(--status-color-confirmed)"></span> Lezione regolare confermata</div>
+    <div class="status-legend-item"><span class="status-dot" style="background:var(--status-color-moved)"></span> Lezione spostata o di recupero</div>
+    <div class="status-legend-item"><span class="status-dot" style="background:var(--status-color-attention)"></span> Lezione annullata o da recuperare</div>
+    <div class="status-legend-item"><span class="status-dot" style="background:var(--status-color-unavailable)"></span> Giorno festivo o indisponibilità dell'insegnante</div>
   </div>
 
   <div class="weekdays">
@@ -1421,6 +1450,32 @@ function toggleHideEmptyDays() {
   renderCalendar();
 }
 
+function toggleStatusLegend() {
+  const panel = document.getElementById('status-legend-panel');
+  const btn = document.getElementById('status-legend-btn');
+  const showing = panel.style.display === 'none';
+  panel.style.display = showing ? 'flex' : 'none';
+  btn.classList.toggle('active', showing);
+}
+
+// Riconduce lo stato "grezzo" di un'occorrenza di lezione a una delle 4
+// categorie visive richieste (confermata / spostata-recupero / da recuperare
+// o annullata / indisponibilità), usate per il pallino colorato sui riquadri
+// del calendario e per la legenda stati.
+const STATUS_META = {
+  confirmed:    { color: 'var(--status-color-confirmed)',    label: 'Lezione regolare confermata' },
+  moved:        { color: 'var(--status-color-moved)',        label: 'Lezione spostata o di recupero' },
+  cancelled:    { color: 'var(--status-color-attention)',    label: 'Lezione annullata' },
+  pending:      { color: 'var(--status-color-attention)',    label: 'Lezione da recuperare' },
+  unavailable:  { color: 'var(--status-color-unavailable)',  label: "Giorno festivo o indisponibilità dell'insegnante" },
+};
+function lessonStatusCategory(status, isMoved) {
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'makeup') return 'pending';
+  if (isMoved) return 'moved'; // include lo stato 'recovered', sempre associato a una lezione spostata
+  return 'confirmed';
+}
+
 function setMobilePanel(name) {
   document.querySelectorAll('.mobile-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.panel === name));
   document.querySelectorAll('.sidebar-card[data-panel]').forEach(c => c.classList.toggle('panel-active', c.dataset.panel === name));
@@ -1653,11 +1708,15 @@ function renderCalendar() {
     // Indisponibilità (giorni/orari in cui non si danno lezioni)
     const unavailToday = getUnavailabilityForDate(cellDate);
     if (unavailToday.some(u => u.allDay)) cell.classList.add('day-unavailable');
+    if (unavailToday.some(u => u.allDay)) {
+      cell.title = STATUS_META.unavailable.label + (unavailToday.find(u => u.allDay && u.label) ? ' · ' + unavailToday.find(u => u.allDay && u.label).label : '');
+    }
     unavailToday.filter(u => !u.allDay).forEach(u => {
       const pill = document.createElement('div');
       pill.className = 'lesson-pill unavail-pill';
+      pill.title = STATUS_META.unavailable.label + (u.label ? ' · ' + u.label : '');
       const range = (u.startTime || '?') + '–' + (u.endTime || '?');
-      pill.innerHTML = `<span><i class="ti ti-ban" style="font-size:10px;"></i> ${range}${u.label ? ' ' + u.label : ''}</span>`;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META.unavailable.color}"></span><span><i class="ti ti-ban" style="font-size:10px;"></i> ${range}${u.label ? ' ' + u.label : ''}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); editUnavailability(u.id); };
       cell.appendChild(pill);
     });
@@ -1692,8 +1751,10 @@ function renderCalendar() {
       }
       pill.style.cssText = pillStyle;
       const noteDot = notes[origKey] ? '· ' : '';
-      const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : isMoved ? '→ ' : '';
-      pill.innerHTML = `<span>${icon}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
+      const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : status === 'cancelled' ? '✕ ' : isMoved ? '→ ' : '';
+      const cat = lessonStatusCategory(status, isMoved);
+      pill.title = STATUS_META[cat].label;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span>${icon}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
       cell.appendChild(pill);
     });

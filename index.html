@@ -328,6 +328,13 @@ if ('serviceWorker' in navigator) {
     background: none; color: var(--color-text-secondary); cursor: pointer; transition: all 0.15s;
   }
   .end-toggle button.active { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+
+  .wizard-steps { display: flex; align-items: center; gap: 8px; margin: -6px 0 14px; }
+  .wizard-step-label { font-size: 11.5px; font-weight: 600; color: var(--color-text-tertiary); font-family: var(--font-sans); }
+  .wizard-dots { display: flex; gap: 5px; margin-left: auto; }
+  .wizard-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-border-secondary); transition: background 0.15s, transform 0.15s; }
+  .wizard-dot.active { background: var(--accent-solid); transform: scale(1.35); }
+  .field input.input-error, .field select.input-error { border-color: var(--color-text-danger); box-shadow: 0 0 0 2px rgba(220,53,69,0.15); }
   .end-badge {
     font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
     background: var(--color-background-secondary); color: var(--color-text-tertiary);
@@ -483,63 +490,79 @@ if ('serviceWorker' in navigator) {
 <div class="modal-overlay" id="modal-student">
   <div class="modal">
     <h3 id="modal-title">Nuovo allievo</h3>
-    <div class="field">
-      <label>Allievo già esistente</label>
-      <select id="s-picker" onchange="pickExistingStudent()">
-        <option value="">— scegli per compilare nome e telefono (opzionale) —</option>
-      </select>
-    </div>
-    <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
-    <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567"></div>
-    <div class="field"><label>Giorno della settimana</label>
-      <select id="s-day">
-        <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
-        <option value="4">Giovedì</option><option value="5">Venerdì</option><option value="6">Sabato</option><option value="0">Domenica</option>
-      </select>
-    </div>
-    <div class="field"><label>Orario</label><input type="time" id="s-time" value="10:00"></div>
-    <div class="field"><label>Durata (minuti)</label>
-      <select id="s-duration">
-        <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected="">60 min</option><option value="90">90 min</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Inizio lezioni</label>
-      <div class="end-toggle" style="margin-bottom:6px;">
-        <button id="start-today-btn" onclick="setStartPreset('today')" style="font-size:11px;">Oggi</button>
-        <button id="start-date-btn" onclick="setStartPreset('date')" style="font-size:11px;">Data libera</button>
-        <button id="start-trim-btn" onclick="setStartPreset('trim')" style="font-size:11px;">Trimestre</button>
-        <button id="start-year-btn" onclick="setStartPreset('year')" style="font-size:11px;">Anno sc.</button>
+    <div class="wizard-steps">
+      <span class="wizard-step-label" id="wizard-step-label">Passo 1 di 2 · Anagrafica &amp; pacchetto</span>
+      <div class="wizard-dots">
+        <div class="wizard-dot active" id="wizard-dot-1"></div>
+        <div class="wizard-dot" id="wizard-dot-2"></div>
       </div>
-      <div id="start-date-field" style="display:none"><input type="date" id="s-startdate"></div>
-      <div id="start-preset-field" style="display:none">
-        <select id="s-startpreset">
-          <optgroup label="Trimestri">
-            <option value="trim-oct">Ottobre–Dicembre</option>
-            <option value="trim-jan">Gennaio–Marzo</option>
-            <option value="trim-apr">Aprile–Giugno</option>
-          </optgroup>
-          <optgroup label="Anno scolastico">
-            <option value="year-oct">Ottobre–Giugno</option>
-          </optgroup>
+    </div>
+
+    <div class="wizard-panel" id="wizard-step-1">
+      <div class="field">
+        <label>Allievo già esistente</label>
+        <select id="s-picker" onchange="pickExistingStudent()">
+          <option value="">— scegli per compilare nome e telefono (opzionale) —</option>
         </select>
-        <select id="s-startyear" style="margin-top:5px;"></select>
+      </div>
+      <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
+      <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567"></div>
+      <div class="field"><label>Durata lezione (minuti)</label>
+        <select id="s-duration">
+          <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected="">60 min</option><option value="90">90 min</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Inizio lezioni</label>
+        <div class="end-toggle" style="margin-bottom:6px;">
+          <button id="start-today-btn" onclick="setStartPreset('today')" style="font-size:11px;">Oggi</button>
+          <button id="start-date-btn" onclick="setStartPreset('date')" style="font-size:11px;">Data libera</button>
+          <button id="start-trim-btn" onclick="setStartPreset('trim')" style="font-size:11px;">Trimestre</button>
+          <button id="start-year-btn" onclick="setStartPreset('year')" style="font-size:11px;">Anno sc.</button>
+        </div>
+        <div id="start-date-field" style="display:none"><input type="date" id="s-startdate"></div>
+        <div id="start-preset-field" style="display:none">
+          <select id="s-startpreset">
+            <optgroup label="Trimestri">
+              <option value="trim-oct">Ottobre–Dicembre</option>
+              <option value="trim-jan">Gennaio–Marzo</option>
+              <option value="trim-apr">Aprile–Giugno</option>
+            </optgroup>
+            <optgroup label="Anno scolastico">
+              <option value="year-oct">Ottobre–Giugno</option>
+            </optgroup>
+          </select>
+          <select id="s-startyear" style="margin-top:5px;"></select>
+        </div>
       </div>
     </div>
-    <div class="field">
-      <label>Fine ricorrenza</label>
-      <div class="end-toggle">
-        <button id="end-never-btn" class="active" onclick="setEndMode('never')">Nessuna fine</button>
-        <button id="end-date-btn" onclick="setEndMode('date')">Fino al giorno</button>
-        <button id="end-count-btn" onclick="setEndMode('count')">N° lezioni</button>
+
+    <div class="wizard-panel" id="wizard-step-2" style="display:none">
+      <div class="field"><label>Giorno della settimana</label>
+        <select id="s-day">
+          <option value="1">Lunedì</option><option value="2">Martedì</option><option value="3">Mercoledì</option>
+          <option value="4">Giovedì</option><option value="5">Venerdì</option><option value="6">Sabato</option><option value="0">Domenica</option>
+        </select>
       </div>
-      <div id="end-date-field" style="display:none"><input type="date" id="s-enddate"></div>
-      <div id="end-count-field" style="display:none"><input type="number" id="s-endcount" min="1" max="200" placeholder="es. 10"></div>
+      <div class="field"><label>Orario</label><input type="time" id="s-time" value="10:00"></div>
+      <div class="field">
+        <label>Fine ricorrenza</label>
+        <div class="end-toggle">
+          <button id="end-never-btn" class="active" onclick="setEndMode('never')">Nessuna fine</button>
+          <button id="end-date-btn" onclick="setEndMode('date')">Fino al giorno</button>
+          <button id="end-count-btn" onclick="setEndMode('count')">N° lezioni</button>
+        </div>
+        <div id="end-date-field" style="display:none"><input type="date" id="s-enddate"></div>
+        <div id="end-count-field" style="display:none"><input type="number" id="s-endcount" min="1" max="200" placeholder="es. 10"></div>
+      </div>
     </div>
+
     <div class="modal-actions">
       <button class="btn-danger" id="delete-btn" onclick="deleteStudent()" style="display:none"><i class="ti ti-trash"></i> Elimina</button>
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
-      <button class="btn-primary" onclick="saveStudent()">Salva</button>
+      <button class="btn-cancel" id="wizard-back-btn" onclick="wizardBack()" style="display:none">Indietro</button>
+      <button class="btn-primary" id="wizard-next-btn" onclick="wizardNext()">Avanti</button>
+      <button class="btn-primary" id="save-student-btn" onclick="saveStudent()" style="display:none">Salva</button>
     </div>
   </div>
 </div>
@@ -1725,6 +1748,34 @@ function pickExistingStudent() {
   document.getElementById('s-phone').value = opt.getAttribute('data-phone') || '';
 }
 
+// ---- Wizard "Nuovo allievo" a 2 passaggi ----
+function goToWizardStep(step) {
+  document.getElementById('wizard-step-1').style.display = step === 1 ? 'block' : 'none';
+  document.getElementById('wizard-step-2').style.display = step === 2 ? 'block' : 'none';
+  document.getElementById('wizard-dot-1').classList.toggle('active', step === 1);
+  document.getElementById('wizard-dot-2').classList.toggle('active', step === 2);
+  document.getElementById('wizard-step-label').textContent = step === 1
+    ? 'Passo 1 di 2 · Anagrafica & pacchetto'
+    : 'Passo 2 di 2 · Schedulazione';
+  document.getElementById('wizard-back-btn').style.display = step === 2 ? 'inline-flex' : 'none';
+  document.getElementById('wizard-next-btn').style.display = step === 1 ? 'inline-flex' : 'none';
+  document.getElementById('save-student-btn').style.display = step === 2 ? 'inline-flex' : 'none';
+  if (step === 1) document.getElementById('s-name').focus();
+}
+function wizardNext() {
+  const nameInput = document.getElementById('s-name');
+  if (!nameInput.value.trim()) {
+    nameInput.classList.add('input-error');
+    nameInput.focus();
+    setTimeout(() => nameInput.classList.remove('input-error'), 1500);
+    return;
+  }
+  goToWizardStep(2);
+}
+function wizardBack() {
+  goToWizardStep(1);
+}
+
 function openAddStudent() {
   editingId = null;
   document.getElementById('modal-title').textContent = 'Nuovo allievo';
@@ -1744,6 +1795,7 @@ function openAddStudent() {
   setEndMode('never');
   document.getElementById('s-enddate').value = '';
   document.getElementById('s-endcount').value = '';
+  goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
 function editStudent(id) {
@@ -1768,6 +1820,7 @@ function editStudent(id) {
   setEndMode(s.endMode || 'never');
   document.getElementById('s-enddate').value = s.endDate || '';
   document.getElementById('s-endcount').value = s.endCount || '';
+  goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
 function saveStudent() {

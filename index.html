@@ -70,6 +70,10 @@ if ('serviceWorker' in navigator) {
     --status-color-moved: #EF9F27;
     --status-color-attention: #e24b4a;
     --status-color-unavailable: #9AA3AF;
+    --whatsapp-text: #128C4A;
+    --whatsapp-bg: rgba(37,211,102,0.12);
+    --whatsapp-bg-hover: rgba(37,211,102,0.22);
+    --whatsapp-border: rgba(37,211,102,0.4);
     --notes-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Ctext x='14' y='46' font-size='30' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AA%3C/text%3E%3Ctext x='84' y='108' font-size='24' fill='%232D6CDF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E");
   }
   @media (prefers-color-scheme: dark) {
@@ -86,6 +90,10 @@ if ('serviceWorker' in navigator) {
       --color-border-danger: #e24b4a;
       --accent-ink: #DCEBFE;
       --accent-cream: #16324f;
+      --whatsapp-text: #4ADE80;
+      --whatsapp-bg: rgba(37,211,102,0.16);
+      --whatsapp-bg-hover: rgba(37,211,102,0.26);
+      --whatsapp-border: rgba(37,211,102,0.45);
       --card-shadow: 0 3px 14px rgba(0,0,0,0.35);
       --notes-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Ctext x='14' y='46' font-size='30' fill='%236FB1FF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AA%3C/text%3E%3Ctext x='84' y='108' font-size='24' fill='%236FB1FF' fill-opacity='0.09' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E");
     }
@@ -370,6 +378,17 @@ if ('serviceWorker' in navigator) {
   }
   .status-legend-item { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--color-text-secondary); }
   .status-legend-item .status-dot { width: 9px; height: 9px; }
+
+  .btn-whatsapp {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 600; font-family: var(--font-sans);
+    padding: 7px 12px; border-radius: 20px; border: 0.5px solid var(--whatsapp-border);
+    background: var(--whatsapp-bg); color: var(--whatsapp-text); cursor: pointer;
+    margin: -4px 0 14px; transition: background 0.15s;
+  }
+  .btn-whatsapp:hover:not(:disabled) { background: var(--whatsapp-bg-hover); }
+  .btn-whatsapp:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-whatsapp i { font-size: 14px; }
   .end-badge {
     font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
     background: var(--color-background-secondary); color: var(--color-text-tertiary);
@@ -548,7 +567,8 @@ if ('serviceWorker' in navigator) {
         </select>
       </div>
       <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
-      <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567"></div>
+      <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567" oninput="syncWhatsappStudentButtonState()"></div>
+      <button type="button" class="btn-whatsapp" id="whatsapp-student-btn" style="display:none" onclick="sendWhatsappForCurrentStudent()"><i class="ti ti-brand-whatsapp"></i> Invia promemoria WhatsApp</button>
       <div class="field"><label>Durata lezione (minuti)</label>
         <select id="s-duration">
           <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected="">60 min</option><option value="90">90 min</option>
@@ -712,6 +732,7 @@ if ('serviceWorker' in navigator) {
       <label><i class="ti ti-bulb" style="font-size:12px;"></i> Orari liberi suggeriti</label>
       <div class="slot-suggestions" id="move-suggestions"></div>
     </div>
+    <button type="button" class="btn-whatsapp" id="whatsapp-move-btn" onclick="sendWhatsappForMove()"><i class="ti ti-brand-whatsapp"></i> Invia promemoria WhatsApp</button>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeMoveModal()">Annulla</button>
       <button class="btn-primary" onclick="confirmMove()">Conferma spostamento</button>
@@ -746,6 +767,98 @@ const COLORS = [
   { bg: '#EEEDFE', border: '#7F77DD', text: '#26215C', dot: '#7F77DD' },
 ];
 const DAYS_IT = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const MONTHS_IT_LONG = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+
+// ---- Promemoria WhatsApp ----
+function formatDateItalianLong(dateObj) {
+  const weekday = DAYS_IT[dateObj.getDay()].toLowerCase();
+  return `${weekday} ${dateObj.getDate()} ${MONTHS_IT_LONG[dateObj.getMonth()]}`;
+}
+
+// Ripulisce un numero di telefono per l'uso in un link wa.me: tiene solo le
+// cifre, e se manca il prefisso internazionale assume l'Italia (+39).
+function sanitizePhoneForWhatsapp(phone) {
+  let cleaned = (phone || '').trim().replace(/[^\d+]/g, '');
+  if (cleaned.startsWith('00')) cleaned = '+' + cleaned.slice(2);
+  if (cleaned.startsWith('+')) return cleaned.slice(1);
+  return '39' + cleaned;
+}
+
+function buildLessonReminderMessage(s, dateObj, time) {
+  const firstName = s.name.split(' ')[0];
+  return `Ciao ${firstName}, ti confermo la lezione di canto di ${formatDateItalianLong(dateObj)} alle ${time}. (Messaggio automatico)`;
+}
+function buildMoveReminderMessage(s, dateObj, time) {
+  const firstName = s.name.split(' ')[0];
+  return `Ciao ${firstName}, ti confermo lo spostamento della lezione di canto a ${formatDateItalianLong(dateObj)} alle ${time}. (Messaggio automatico)`;
+}
+
+// Apre WhatsApp (app o web) con il numero e il messaggio precompilati: è
+// l'insegnante a rivedere e premere invio, non viene inviato nulla in automatico.
+function openWhatsappReminder(phone, message) {
+  if (!phone) return;
+  const digits = sanitizePhoneForWhatsapp(phone);
+  const url = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+// Trova la prossima occorrenza attiva (non annullata, non spostata altrove,
+// non già segnata come da recuperare) di un allievo nei prossimi `rangeDays`.
+function getNextLessonForStudent(s, rangeDays = 60) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(today); rangeEnd.setDate(today.getDate() + rangeDays);
+  let best = null;
+  const cur = new Date(today);
+  while (cur <= rangeEnd) {
+    if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+      const origKey = cur.toDateString() + '_' + s.id;
+      if (!deletedLessons.has(origKey) && !movedLessons[origKey] && getStatus(origKey) === 'normal') {
+        best = { date: new Date(cur), time: s.time };
+        break;
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  Object.entries(movedLessons).forEach(([origKey, mv]) => {
+    if (parseInt(origKey.split('_')[1]) !== s.id) return;
+    if (deletedLessons.has(origKey) || getStatus(origKey) !== 'normal') return;
+    const newDate = new Date(mv.date + 'T00:00:00');
+    if (newDate < today || newDate > rangeEnd) return;
+    if (!best || newDate < best.date) best = { date: newDate, time: mv.time };
+  });
+  return best;
+}
+
+function syncWhatsappStudentButtonState() {
+  const btn = document.getElementById('whatsapp-student-btn');
+  if (!btn || btn.style.display === 'none') return;
+  const phone = document.getElementById('s-phone').value.trim();
+  btn.disabled = !phone;
+  btn.title = phone ? '' : 'Inserisci un numero di telefono per usare questa funzione';
+}
+
+function sendWhatsappForCurrentStudent() {
+  if (!editingId) return;
+  const s = students.find(x => x.id === editingId);
+  if (!s) return;
+  const phone = document.getElementById('s-phone').value.trim() || s.phone;
+  if (!phone) return;
+  const next = getNextLessonForStudent(s);
+  const msg = next
+    ? buildLessonReminderMessage(s, next.date, next.time)
+    : `Ciao ${s.name.split(' ')[0]}, ti scrivo per la tua prossima lezione di canto. (Messaggio automatico)`;
+  openWhatsappReminder(phone, msg);
+}
+
+function sendWhatsappForMove() {
+  const s = currentLessonStudent;
+  if (!s || !s.phone) return;
+  const dateVal = document.getElementById('move-date').value;
+  const timeVal = document.getElementById('move-time').value;
+  if (!dateVal || !timeVal) return;
+  const dateObj = new Date(dateVal + 'T00:00:00');
+  openWhatsappReminder(s.phone, buildMoveReminderMessage(s, dateObj, timeVal));
+}
 
 let currentDate = new Date();
 let editingId = null;
@@ -1873,6 +1986,7 @@ function openAddStudent() {
   setEndMode('never');
   document.getElementById('s-enddate').value = '';
   document.getElementById('s-endcount').value = '';
+  document.getElementById('whatsapp-student-btn').style.display = 'none';
   goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
@@ -1898,6 +2012,8 @@ function editStudent(id) {
   setEndMode(s.endMode || 'never');
   document.getElementById('s-enddate').value = s.endDate || '';
   document.getElementById('s-endcount').value = s.endCount || '';
+  document.getElementById('whatsapp-student-btn').style.display = 'inline-flex';
+  syncWhatsappStudentButtonState();
   goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
@@ -2370,6 +2486,9 @@ function openMoveLesson() {
   }
   moveSuggestionsExpanded = false;
   renderMoveSuggestions();
+  const waBtn = document.getElementById('whatsapp-move-btn');
+  waBtn.disabled = !s.phone;
+  waBtn.title = s.phone ? '' : 'Nessun numero di telefono registrato per questo allievo';
   document.getElementById('modal-lesson').classList.remove('open');
   document.getElementById('modal-move').classList.add('open');
 }

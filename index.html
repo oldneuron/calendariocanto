@@ -184,7 +184,23 @@ if ('serviceWorker' in navigator) {
   }
 
   .sidebar { margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 500px) { .sidebar { grid-template-columns: 1fr; } }
+
+  .mobile-tabs { display: none; gap: 6px; margin: 14px 0 12px; }
+  .mobile-tab-btn {
+    flex: 1; padding: 9px 4px; font-size: 12px; font-weight: 500; font-family: var(--font-sans);
+    border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md);
+    background: var(--color-background-primary); color: var(--color-text-secondary);
+    display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+  }
+  .mobile-tab-btn i { font-size: 15px; }
+  .mobile-tab-btn.active { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+
+  @media (max-width: 500px) {
+    .sidebar { grid-template-columns: 1fr; }
+    .mobile-tabs { display: flex; }
+    .sidebar-card[data-panel] { display: none; }
+    .sidebar-card[data-panel].panel-active { display: block; }
+  }
   .sidebar-card {
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
@@ -272,9 +288,34 @@ if ('serviceWorker' in navigator) {
     font-size: 13px; cursor: pointer; color: var(--color-text-danger);
     margin-right: auto; font-family: var(--font-sans);
   }
-  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .legend-item {
+    display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary);
+    cursor: pointer; padding: 3px 7px; border-radius: 20px; transition: background 0.15s, opacity 0.15s;
+  }
+  .legend-item:hover { background: var(--color-background-secondary); }
+  .legend-item.filter-active { background: var(--color-background-secondary); box-shadow: 0 0 0 1.5px var(--accent-solid) inset; }
+  .legend-item.filter-dimmed { opacity: 0.4; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-reset-chip {
+    display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600;
+    color: var(--accent-ink); cursor: pointer; padding: 3px 9px; border-radius: 20px;
+    background: var(--accent-cream);
+  }
+
+  .cal-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -4px 0 10px; }
+  .filter-toggle-btn {
+    font-size: 11.5px; font-weight: 500; padding: 5px 10px; font-family: var(--font-sans);
+    border: 0.5px dashed var(--color-border-secondary); border-radius: 20px;
+    background: none; color: var(--color-text-tertiary); cursor: pointer;
+    display: flex; align-items: center; gap: 5px; transition: all 0.15s;
+  }
+  .filter-toggle-btn:hover { border-color: var(--color-border-secondary); color: var(--color-text-secondary); }
+  .filter-toggle-btn.active { background: var(--accent-gradient); color: #fff; border-color: transparent; border-style: solid; }
+  .filter-toggle-btn.active:hover { filter: brightness(1.06); }
+
+  .day-cell.day-empty-dim { opacity: 0.3; }
+  .day-cell.day-empty-dim:hover { opacity: 0.6; }
   .upcoming-item { padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 8px; }
   .upcoming-item:last-child { border-bottom: none; }
   .upcoming-date { font-size: 11px; color: var(--color-text-tertiary); min-width: 55px; }
@@ -395,6 +436,9 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <div class="legend" id="legend"></div>
+  <div class="cal-filters" id="cal-filters">
+    <button class="filter-toggle-btn" id="hide-empty-btn" onclick="toggleHideEmptyDays()"><i class="ti ti-eye-off"></i> Solo giorni con lezioni</button>
+  </div>
 
   <div class="weekdays">
     <div class="weekday">Lun</div><div class="weekday">Mar</div><div class="weekday">Mer</div>
@@ -402,24 +446,30 @@ if ('serviceWorker' in navigator) {
   </div>
   <div class="days-grid" id="days-grid"></div>
 
+  <div class="mobile-tabs" id="mobile-tabs">
+    <button class="mobile-tab-btn active" data-panel="students" onclick="setMobilePanel('students')"><i class="ti ti-users"></i>Allievi</button>
+    <button class="mobile-tab-btn" data-panel="upcoming" onclick="setMobilePanel('upcoming')"><i class="ti ti-calendar-event"></i>Prossime</button>
+    <button class="mobile-tab-btn" data-panel="followups" onclick="setMobilePanel('followups')"><i class="ti ti-refresh"></i>Recuperi</button>
+  </div>
+
   <div class="sidebar">
-    <div class="sidebar-card">
+    <div class="sidebar-card panel-active" data-panel="students">
       <h3><i class="ti ti-users"></i> Allievi</h3>
       <div id="students-list"></div>
       <button class="add-btn" onclick="openAddStudent()"><i class="ti ti-plus"></i> Aggiungi allievo</button>
       <button class="link-btn" onclick="downloadStudentList()" style="display:block;margin-top:8px;">Scarica elenco allievi (CSV) →</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
-      <div class="sidebar-card">
+      <div class="sidebar-card" data-panel="upcoming">
         <h3><i class="ti ti-calendar-event"></i> Prossime lezioni</h3>
         <div id="upcoming-list"></div>
       </div>
-      <div class="sidebar-card">
+      <div class="sidebar-card" data-panel="followups">
         <h3><i class="ti ti-refresh"></i> Da recuperare</h3>
         <div id="makeup-list"></div>
         <button class="link-btn" onclick="openHistory()">Vedi storico completo →</button>
       </div>
-      <div class="sidebar-card">
+      <div class="sidebar-card" data-panel="followups">
         <h3><i class="ti ti-calendar-off"></i> Non disponibile</h3>
         <div id="unavail-list"></div>
         <button class="add-btn" onclick="openAddUnavailability()"><i class="ti ti-plus"></i> Aggiungi indisponibilità</button>
@@ -1308,12 +1358,47 @@ function applyCustomStart(dateStr) {
   document.getElementById('s-startdate').value = dateStr;
 }
 
+// --- Filtri rapidi sul calendario ---------------------------------------
+// calendarStudentFilter: id dell'allievo su cui isolare il calendario (o
+// null per mostrarli tutti). hideEmptyDays: se true, attenua nella griglia
+// i giorni senza lezioni (per l'allievo filtrato, se presente) e senza
+// indisponibilità.
+let calendarStudentFilter = null;
+let hideEmptyDays = false;
+
+function toggleStudentFilter(id) {
+  calendarStudentFilter = (calendarStudentFilter === id) ? null : id;
+  renderCalendar();
+}
+
+function clearStudentFilter() {
+  calendarStudentFilter = null;
+  renderCalendar();
+}
+
+function toggleHideEmptyDays() {
+  hideEmptyDays = !hideEmptyDays;
+  renderCalendar();
+}
+
+function setMobilePanel(name) {
+  document.querySelectorAll('.mobile-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.panel === name));
+  document.querySelectorAll('.sidebar-card[data-panel]').forEach(c => c.classList.toggle('panel-active', c.dataset.panel === name));
+}
+
 function renderLegend() {
-  document.getElementById('legend').innerHTML = students.map((s, i) => {
+  const hasFilter = calendarStudentFilter !== null;
+  const items = students.map((s, i) => {
     const c = getColor(i);
     const lbl = periodLabel(s);
-    return `<div class="legend-item"><div class="legend-dot" style="background:${c.dot}"></div><span>${s.name.split(' ')[0]}</span>${lbl ? `<span class="end-badge active-end">${lbl}</span>` : ''}${lessonCountBadge(s)}</div>`;
+    const isActive = calendarStudentFilter === s.id;
+    const cls = 'legend-item' + (isActive ? ' filter-active' : (hasFilter ? ' filter-dimmed' : ''));
+    return `<div class="${cls}" onclick="toggleStudentFilter(${s.id})" title="Mostra solo ${s.name.split(' ')[0]} nel calendario"><div class="legend-dot" style="background:${c.dot}"></div><span>${s.name.split(' ')[0]}</span>${lbl ? `<span class="end-badge active-end">${lbl}</span>` : ''}${lessonCountBadge(s)}</div>`;
   }).join('');
+  const resetChip = hasFilter ? `<div class="legend-reset-chip" onclick="clearStudentFilter()"><i class="ti ti-x" style="font-size:11px;"></i> Tutti</div>` : '';
+  document.getElementById('legend').innerHTML = items + resetChip;
+  const hideBtn = document.getElementById('hide-empty-btn');
+  if (hideBtn) hideBtn.classList.toggle('active', hideEmptyDays);
 }
 
 function renderStudents() {
@@ -1538,9 +1623,17 @@ function renderCalendar() {
     });
 
     const cellStr = cellDate.toDateString();
-    const dayLessons = allLessons.filter(l => l.displayDate.toDateString() === cellStr);
+    let dayLessons = allLessons.filter(l => l.displayDate.toDateString() === cellStr);
+    if (calendarStudentFilter !== null) dayLessons = dayLessons.filter(l => l.student.id === calendarStudentFilter);
     // Sort by time
     dayLessons.sort((a, b) => a.displayTime.localeCompare(b.displayTime));
+
+    // Filtro "solo giorni con lezioni": attenua i giorni senza nulla da
+    // mostrare (per l'allievo filtrato, se presente) e senza indisponibilità.
+    // Oggi e i giorni fuori mese restano invariati.
+    if (hideEmptyDays && !otherMonth && cellDate.getTime() !== today.getTime() && dayLessons.length === 0 && unavailToday.length === 0) {
+      cell.classList.add('day-empty-dim');
+    }
 
     dayLessons.forEach(({ origKey, student: s, idx, displayTime, isMoved }) => {
       const status = getStatus(origKey);

@@ -335,6 +335,19 @@ if ('serviceWorker' in navigator) {
   .wizard-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-border-secondary); transition: background 0.15s, transform 0.15s; }
   .wizard-dot.active { background: var(--accent-solid); transform: scale(1.35); }
   .field input.input-error, .field select.input-error { border-color: var(--color-text-danger); box-shadow: 0 0 0 2px rgba(220,53,69,0.15); }
+
+  .slot-suggestions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .slot-chip {
+    font-size: 12px; font-weight: 500; padding: 5px 10px; font-family: var(--font-sans);
+    border: 0.5px solid var(--color-border-secondary); border-radius: 20px;
+    background: var(--color-background-primary); color: var(--color-text-secondary); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .slot-chip:hover { border-color: var(--accent-solid); color: var(--accent-solid); }
+  .slot-chip.active { background: var(--accent-gradient); color: #fff; border-color: transparent; }
+  .slot-chip-more { background: none; border-style: dashed; color: var(--color-text-tertiary); }
+  .slot-hint { font-size: 12px; color: var(--color-text-tertiary); }
+  .slot-hint-warn { color: #7a5000; }
   .end-badge {
     font-size: 10px; font-weight: 500; padding: 1px 5px; border-radius: 10px;
     background: var(--color-background-secondary); color: var(--color-text-tertiary);
@@ -664,8 +677,12 @@ if ('serviceWorker' in navigator) {
   <div class="modal">
     <h3>Sposta lezione</h3>
     <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;" id="move-modal-body">Spostamento di: Luisa — 11 giugno 2026</div>
-    <div class="field"><label>Nuova data</label><input type="date" id="move-date"></div>
-    <div class="field"><label>Nuovo orario</label><input type="time" id="move-time"></div>
+    <div class="field"><label>Nuova data</label><input type="date" id="move-date" onchange="onMoveDateChange()"></div>
+    <div class="field"><label>Nuovo orario</label><input type="time" id="move-time" oninput="syncMoveSuggestionActive()"></div>
+    <div class="field">
+      <label><i class="ti ti-bulb" style="font-size:12px;"></i> Orari liberi suggeriti</label>
+      <div class="slot-suggestions" id="move-suggestions"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeMoveModal()">Annulla</button>
       <button class="btn-primary" onclick="confirmMove()">Conferma spostamento</button>
@@ -2163,6 +2180,113 @@ function openLesson(s, date, origKey, displayTime) {
   document.getElementById('modal-lesson').classList.add('open');
 }
 
+// ---- Suggerimenti di orari liberi per lo spostamento/recupero di una lezione ----
+function timeToMinutes(t) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+function minutesToTime(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+// Intervalli occupati (in minuti dalla mezzanotte) da altre lezioni già presenti
+// in quel giorno: sia occorrenze ricorrenti sia lezioni spostate lì, escluse
+// quelle annullate e, ovviamente, la lezione che si sta spostando (excludeKey).
+function getBusyIntervalsForDate(dateObj, excludeKey) {
+  const intervals = [];
+  const dateStr = dateObj.toDateString();
+  const isoStr = toISODateLocal(dateObj);
+  students.forEach(s => {
+    if (dateObj.getDay() !== s.day || !isLessonActive(s, dateObj)) return;
+    const origKey = dateStr + '_' + s.id;
+    if (origKey === excludeKey) return;
+    if (deletedLessons.has(origKey) || movedLessons[origKey]) return;
+    if (getStatus(origKey) === 'cancelled') return;
+    const start = timeToMinutes(s.time);
+    intervals.push({ start, end: start + s.duration, label: s.name.split(' ')[0] });
+  });
+  Object.entries(movedLessons).forEach(([origKey, mv]) => {
+    if (origKey === excludeKey || mv.date !== isoStr) return;
+    if (deletedLessons.has(origKey) || getStatus(origKey) === 'cancelled') return;
+    const sid = parseInt(origKey.split('_')[1]);
+    const s = students.find(x => x.id === sid);
+    if (!s) return;
+    const start = timeToMinutes(mv.time);
+    intervals.push({ start, end: start + s.duration, label: s.name.split(' ')[0] });
+  });
+  return intervals.sort((a, b) => a.start - b.start);
+}
+
+const SLOT_WORK_START = 8 * 60;   // 08:00
+const SLOT_WORK_END = 21 * 60;    // 21:00
+const SLOT_STEP = 30;             // minuti tra un suggerimento e l'altro
+
+// Calcola gli slot liberi di `duration` minuti in un giorno, tenendo conto
+// sia delle altre lezioni sia delle indisponibilità impostate dall'insegnante.
+function computeFreeSlots(dateObj, duration, excludeKey) {
+  const unavail = getUnavailabilityForDate(dateObj);
+  if (unavail.some(u => u.allDay)) return { allDayBlocked: true, slots: [] };
+  const busy = getBusyIntervalsForDate(dateObj, excludeKey);
+  unavail.filter(u => !u.allDay && u.startTime && u.endTime).forEach(u => {
+    busy.push({ start: timeToMinutes(u.startTime), end: timeToMinutes(u.endTime) });
+  });
+  const slots = [];
+  for (let t = SLOT_WORK_START; t + duration <= SLOT_WORK_END; t += SLOT_STEP) {
+    const slotEnd = t + duration;
+    const overlaps = busy.some(b => t < b.end && slotEnd > b.start);
+    if (!overlaps) slots.push(t);
+  }
+  return { allDayBlocked: false, slots };
+}
+
+let moveSuggestionsExpanded = false;
+function toggleMoveSuggestionsExpand() {
+  moveSuggestionsExpanded = true;
+  renderMoveSuggestions();
+}
+function selectMoveSlot(time) {
+  document.getElementById('move-time').value = time;
+  syncMoveSuggestionActive();
+}
+function syncMoveSuggestionActive() {
+  const t = document.getElementById('move-time').value;
+  document.querySelectorAll('#move-suggestions .slot-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.time === t);
+  });
+}
+function onMoveDateChange() {
+  moveSuggestionsExpanded = false;
+  renderMoveSuggestions();
+}
+function renderMoveSuggestions() {
+  const box = document.getElementById('move-suggestions');
+  const dateVal = document.getElementById('move-date').value;
+  if (!dateVal || !currentLessonStudent) {
+    box.innerHTML = '<span class="slot-hint">Scegli prima una data.</span>';
+    return;
+  }
+  const dateObj = new Date(dateVal + 'T00:00:00');
+  const duration = currentLessonStudent.duration || 60;
+  const { allDayBlocked, slots } = computeFreeSlots(dateObj, duration, currentLessonKey);
+  if (allDayBlocked) {
+    box.innerHTML = '<span class="slot-hint slot-hint-warn"><i class="ti ti-ban"></i> Giornata non disponibile per un\'indisponibilità impostata</span>';
+    return;
+  }
+  if (!slots.length) {
+    box.innerHTML = '<span class="slot-hint slot-hint-warn"><i class="ti ti-alert-triangle"></i> Nessuno slot libero in questo giorno (08:00–21:00)</span>';
+    return;
+  }
+  const maxVisible = 10;
+  const hasMore = !moveSuggestionsExpanded && slots.length > maxVisible;
+  const visible = hasMore ? slots.slice(0, maxVisible) : slots;
+  box.innerHTML = visible.map(t => {
+    const time = minutesToTime(t);
+    return `<button type="button" class="slot-chip" data-time="${time}" onclick="selectMoveSlot('${time}')">${time}</button>`;
+  }).join('') + (hasMore ? `<button type="button" class="slot-chip slot-chip-more" onclick="toggleMoveSuggestionsExpand()">+${slots.length - maxVisible} altri</button>` : '');
+  syncMoveSuggestionActive();
+}
+
 function openMoveLesson() {
   if (!currentLessonKey) return;
   const s = currentLessonStudent;
@@ -2183,6 +2307,8 @@ function openMoveLesson() {
     document.getElementById('move-date').value = next.toISOString().slice(0, 10);
     document.getElementById('move-time').value = currentLessonDisplayTime;
   }
+  moveSuggestionsExpanded = false;
+  renderMoveSuggestions();
   document.getElementById('modal-lesson').classList.remove('open');
   document.getElementById('modal-move').classList.add('open');
 }

@@ -408,6 +408,18 @@ if ('serviceWorker' in navigator) {
   .makeup-item:hover { opacity: 0.75; }
   .recovered-badge { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #E7F7EE; color: #0B6B3A; margin-left: 4px; vertical-align: middle; }
   .link-btn { background: none; border: none; padding: 6px 0 0; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; text-decoration: underline; }
+  .install-step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .install-step:last-child { margin-bottom: 0; }
+  .install-step-num {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent-gradient); color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-family: var(--font-display);
+  }
+  .install-step i { color: var(--accent-solid); }
+  .install-help-note {
+    font-size: 12.5px; color: var(--color-text-tertiary); margin-top: 14px;
+    padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary);
+  }
   .link-btn:hover { color: var(--color-text-primary); }
   .history-item { padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: flex-start; gap: 8px; }
   .history-item:last-child { border-bottom: none; }
@@ -557,7 +569,7 @@ if ('serviceWorker' in navigator) {
       <span class="sync-status" id="sync-status"></span>
       <button onclick="pullFromServerIfNewer()" title="Controlla aggiornamenti dal server" style="padding:4px 6px;"><i class="ti ti-refresh"></i></button>
       <span class="unsaved-dot visible" id="unsaved-dot" title="Modifiche non ancora sincronizzate"></span>
-      <button id="install-btn" onclick="installPWA()" style="display:none"><i class="ti ti-device-mobile"></i> Installa</button>
+      <button id="install-btn" onclick="installPWA()"><i class="ti ti-device-mobile"></i> Installa</button>
       <button onclick="document.getElementById('import-input').click()"><i class="ti ti-upload"></i> Importa</button>
       <button class="btn-export" onclick="exportFile()"><i class="ti ti-download"></i> Esporta</button>
     </div>
@@ -836,6 +848,18 @@ if ('serviceWorker' in navigator) {
     <div id="history-list"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeHistoryModal()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal istruzioni installazione (per i browser che non offrono
+     l'installazione automatica: iPhone/iPad, e a volte Android) -->
+<div class="modal-overlay" id="modal-install-help">
+  <div class="modal">
+    <h3><i class="ti ti-device-mobile" style="font-size:16px;"></i> Installa l'app</h3>
+    <div id="install-help-body" style="font-size:14px;color:var(--color-text-secondary);line-height:1.6;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
     </div>
   </div>
 </div>
@@ -2640,26 +2664,135 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
   });
 });
 
-// PWA install prompt
+// ---- Installazione app ----
+// Il pulsante "Installa" è sempre visibile (a meno che l'app non sia già
+// installata): dove il browser lo permette, apre il prompt nativo; dove non
+// esiste un'installazione automatica (Safari/iOS, e a volte Android quando
+// Chrome sopprime temporaneamente il prompt) mostra istruzioni passo-passo
+// per il browser rilevato. Nessun sito può "forzare" l'installazione da
+// codice: è una restrizione di sicurezza del browser, non un limite di
+// quest'app — il pulsante fa comunque il possibile in ogni caso.
 let _deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   _deferredInstallPrompt = e;
-  const btn = document.getElementById('install-btn');
-  if (btn) btn.style.display = 'flex';
 });
 window.addEventListener('appinstalled', () => {
   _deferredInstallPrompt = null;
   const btn = document.getElementById('install-btn');
   if (btn) btn.style.display = 'none';
 });
+
+function isAppInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+function detectInstallPlatform() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSafari = /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isSamsung = /SamsungBrowser/i.test(ua);
+  const isFirefox = /Firefox/i.test(ua) && !/fxios/i.test(ua);
+  const isEdge = /Edg\//i.test(ua);
+  const isChrome = /Chrome/i.test(ua) && !isEdge && !isSamsung;
+
+  if (isIOS) return isSafari ? 'ios-safari' : 'ios-other';
+  if (isAndroid) {
+    if (isSamsung) return 'android-samsung';
+    if (isFirefox) return 'android-firefox';
+    return 'android-other';
+  }
+  if (isFirefox) return 'desktop-firefox';
+  if (isChrome || isEdge) return 'desktop-chromium';
+  return 'unknown';
+}
+
+const INSTALL_INSTRUCTIONS = {
+  'ios-safari': {
+    steps: [
+      'Tocca il pulsante <strong>Condividi</strong> <i class="ti ti-share-2"></i> nella barra in basso di Safari.',
+      'Scorri l\'elenco e tocca <strong>"Aggiungi alla schermata Home"</strong>.',
+      'Conferma toccando <strong>"Aggiungi"</strong> in alto a destra.',
+    ],
+    note: 'Su iPhone e iPad questo è l\'unico modo per installare un\'app web: Safari non permette ai siti di avviare l\'installazione da soli, per motivi di sicurezza — è normale, non è un problema di quest\'app.',
+  },
+  'ios-other': {
+    steps: [
+      'Tocca l\'icona <strong>Condividi</strong> <i class="ti ti-share-2"></i> (di solito in alto, vicino alla barra degli indirizzi).',
+      'Cerca e tocca <strong>"Aggiungi alla schermata Home"</strong>.',
+    ],
+    note: 'Su iPhone e iPad tutti i browser si appoggiano a Safari per l\'installazione, quindi la procedura è la stessa ovunque.',
+  },
+  'android-samsung': {
+    steps: [
+      'Tocca i tre puntini <i class="ti ti-dots-vertical"></i> nel menu del browser.',
+      'Tocca <strong>"Aggiungi pagina a"</strong> → <strong>"Schermata Home"</strong>.',
+    ],
+  },
+  'android-firefox': {
+    steps: [
+      'Tocca i tre puntini <i class="ti ti-dots-vertical"></i> in basso a destra.',
+      'Tocca <strong>"Installa"</strong> oppure <strong>"Aggiungi a schermata Home"</strong>.',
+    ],
+  },
+  'android-other': {
+    steps: [
+      'Tocca i tre puntini <i class="ti ti-dots-vertical"></i> in alto a destra di Chrome.',
+      'Cerca la voce <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong> e toccala.',
+    ],
+    note: 'Se non vedi questa voce, prova ad andare in Impostazioni di Chrome → Impostazioni sito → cerca questo sito → "Cancella e reimposta", poi ricarica la pagina: a volte Chrome nasconde temporaneamente questa opzione dopo una disinstallazione.',
+  },
+  'desktop-chromium': {
+    steps: [
+      'Cerca l\'icona di installazione <i class="ti ti-square-plus"></i> nella barra degli indirizzi, sulla destra (a volte è dentro il menu con i tre puntini).',
+      'Clicca <strong>"Installa"</strong> nella finestra che appare.',
+    ],
+  },
+  'desktop-firefox': {
+    steps: [
+      'Firefox per computer non supporta l\'installazione delle app web come app a sé stante.',
+      'Puoi comunque creare un segnalibro o un collegamento sul desktop dal menu del browser, oppure aprire questo sito da Chrome o Edge per installarlo come app vera e propria.',
+    ],
+  },
+  'unknown': {
+    steps: [
+      'Apri il menu del tuo browser (di solito tre puntini o tre linee, in alto o in basso).',
+      'Cerca una voce come <strong>"Aggiungi a schermata Home"</strong> o <strong>"Installa app"</strong>.',
+    ],
+  },
+};
+
+function showInstallInstructions() {
+  const platform = detectInstallPlatform();
+  const info = INSTALL_INSTRUCTIONS[platform] || INSTALL_INSTRUCTIONS.unknown;
+  const stepsHtml = info.steps.map((s, i) => `
+    <div class="install-step">
+      <div class="install-step-num">${i + 1}</div>
+      <div>${s}</div>
+    </div>`).join('');
+  const noteHtml = info.note ? `<div class="install-help-note">${info.note}</div>` : '';
+  document.getElementById('install-help-body').innerHTML = stepsHtml + noteHtml;
+  document.getElementById('modal-install-help').classList.add('open');
+}
+
 function installPWA() {
-  if (!_deferredInstallPrompt) return;
-  _deferredInstallPrompt.prompt();
-  _deferredInstallPrompt.userChoice.then(() => {
-    _deferredInstallPrompt = null;
-    document.getElementById('install-btn').style.display = 'none';
-  });
+  if (_deferredInstallPrompt) {
+    _deferredInstallPrompt.prompt();
+    _deferredInstallPrompt.userChoice.then(() => {
+      _deferredInstallPrompt = null;
+    });
+    return;
+  }
+  showInstallInstructions();
+}
+
+// Nasconde il pulsante solo se l'app risulta già installata (aperta in
+// modalità standalone); altrimenti resta sempre visibile, indipendentemente
+// dal fatto che il browser abbia offerto o meno il prompt automatico.
+if (isAppInstalled()) {
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.style.display = 'none';
 }
 
 renderCalendar();

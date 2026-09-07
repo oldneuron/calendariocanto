@@ -157,6 +157,7 @@ if ('serviceWorker' in navigator) {
   .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
   .day-cell {
     min-height: 72px;
+    min-width: 0;
     border-radius: var(--border-radius-md);
     border: 0.5px solid var(--color-border-tertiary);
     padding: 4px;
@@ -195,6 +196,9 @@ if ('serviceWorker' in navigator) {
     font-family: var(--font-sans);
   }
   .lesson-pill:hover { opacity: 0.85; }
+  .lesson-pill .pill-label {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1;
+  }
   .unavail-pill {
     background-image: repeating-linear-gradient(45deg, var(--color-background-secondary), var(--color-background-secondary) 4px, var(--color-border-secondary) 4px, var(--color-border-secondary) 5px);
     color: var(--color-text-secondary);
@@ -464,12 +468,98 @@ if ('serviceWorker' in navigator) {
   .sync-status.sync-error, .sync-status.sync-offline { color: var(--color-text-danger); }
   .sync-status.sync-ok { color: #1D9E75; }
   #import-input { display: none; }
+
+  /* ==========================================================================
+     Mobile (≤500px): titolo più compatto, calendario più verticale e in
+     primo piano (senza l'elenco allievi/legenda subito sotto la data), e
+     caratteri leggermente più grandi ovunque per una lettura più comoda.
+     Va DOPO tutte le regole base qui sopra, così le sovrascrive davvero.
+     ========================================================================== */
+  @media (max-width: 500px) {
+    body { padding: 0.85rem 0.6rem; }
+
+    /* Titolo: meno spazio, su una riga sola, toolbar spostata sotto */
+    .app-title { flex-wrap: wrap; font-size: 17px; gap: 8px; row-gap: 8px; margin-bottom: 1rem; }
+    .app-title-text { flex: 1 1 auto; min-width: 0; }
+    .title-badge { width: 30px; height: 30px; }
+    .title-badge i { font-size: 15px; }
+    .toolbar { flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; row-gap: 6px; }
+    .toolbar button { font-size: 13px; }
+    .toolbar button i { font-size: 15px; }
+    .sync-status { font-size: 12.5px; }
+
+    /* Elenco allievi subito sotto la data: nascosto, il conteggio lezioni si
+       trova ora nella scheda "Allievi" più in basso (vedi .student-time) */
+    .legend { display: none; }
+
+    /* Calendario più verticale: celle più alte e con più "aria", per dare
+       al calendario più peso visivo e più spazio di lettura sullo schermo */
+    .weekday { font-size: 12.5px; padding: 6px 0; }
+    .weekdays, .days-grid { gap: 2px; }
+    .day-cell { min-height: 108px; padding: 4px 2px; }
+    .day-num { font-size: 13.5px; width: 24px; height: 24px; }
+    .lesson-pill {
+      font-size: 12px; padding: 2px 3px; margin-bottom: 3px; gap: 0;
+    }
+    /* Sui riquadri mobili, minuscoli, il pallino di stato lascia il posto al
+       nome (colore di sfondo e icona restano comunque a indicare lo stato) */
+    .lesson-pill .status-dot { display: none; }
+    .unavail-pill .status-dot { display: inline-block; width: 6px; height: 6px; }
+    .cal-title { font-size: 21px; }
+    .cal-nav button { width: 36px; height: 36px; font-size: 16px; }
+    .today-btn { font-size: 14px !important; }
+    .year-switcher .year-label { font-size: 14px; }
+    .year-switcher button { width: 28px; height: 28px; font-size: 13px; }
+
+    /* Filtri e legenda stati sopra al calendario */
+    .filter-toggle-btn { font-size: 12.5px; }
+    .status-legend-item { font-size: 13.5px; }
+    .status-legend-item .status-dot { width: 10px; height: 10px; }
+
+    /* Schede sotto al calendario (Allievi / Prossime / Recuperi) */
+    .mobile-tab-btn { font-size: 13px; }
+    .mobile-tab-btn i { font-size: 16px; }
+    .sidebar-card h3 { font-size: 16.5px; }
+    .student-avatar { width: 30px; height: 30px; font-size: 12px; }
+    .student-name { font-size: 14.5px; }
+    .student-time { font-size: 12.5px; }
+    .end-badge { font-size: 11px; }
+    .add-btn { font-size: 14px; }
+    .link-btn { font-size: 13px; }
+    .upcoming-date, .upcoming-hour { font-size: 12.5px; }
+    .upcoming-name { font-size: 14.5px; }
+    .makeup-date { font-size: 12.5px; }
+    .makeup-name { font-size: 14.5px; }
+    .makeup-icon { font-size: 14px; }
+    .history-name { font-size: 14.5px; }
+    .history-date { font-size: 13px; }
+    .history-sub { font-size: 12.5px; }
+    .history-badge { font-size: 11px; }
+    .history-filters button { font-size: 12px; }
+    .moved-badge, .recovered-badge { font-size: 11px; }
+
+    /* Modali (allievo, lezione, spostamento, indisponibilità, ecc.) */
+    .modal h3 { font-size: 19px; }
+    .field label { font-size: 13px; }
+    .field input, .field select { font-size: 15.5px; }
+    .btn-primary, .btn-cancel, .btn-danger { font-size: 14px; }
+    .wizard-step-label { font-size: 12.5px; }
+    .slot-chip { font-size: 13px; }
+    .slot-hint { font-size: 13px; }
+    .btn-whatsapp { font-size: 13.5px; }
+    .action-row button { font-size: 13px; }
+    .holidays-subtitle { font-size: 13.5px; }
+    .holiday-group-title { font-size: 13px; }
+    .holiday-row { font-size: 14.5px; }
+    .holiday-row .holiday-date { font-size: 12.5px; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="app-title">
-    <span class="title-badge"><i class="ti ti-music"></i></span> Calendario Lezioni di Canto
+    <span class="title-badge"><i class="ti ti-music"></i></span>
+    <span class="app-title-text">Calendario Lezioni di Canto</span>
     <div class="toolbar">
       <span class="sync-status" id="sync-status"></span>
       <button onclick="pullFromServerIfNewer()" title="Controlla aggiornamenti dal server" style="padding:4px 6px;"><i class="ti ti-refresh"></i></button>
@@ -1621,6 +1711,7 @@ function renderStudents() {
       <div class="student-info">
         <div class="student-name">${s.name}${lbl ? ` <span class="end-badge active-end">${lbl}</span>` : ''}</div>
         <div class="student-time">${DAYS_IT[s.day]} · ${s.time} · ${s.duration} min</div>
+        <div class="student-time" style="margin-top:2px;">${lessonCountBadge(s)}</div>
         ${s.phone ? `<div class="student-time"><i class="ti ti-phone" style="font-size:10px;"></i> ${s.phone}</div>` : ''}
       </div>
       <div class="student-dot" style="background:${c.dot}"></div>
@@ -1829,7 +1920,7 @@ function renderCalendar() {
       pill.className = 'lesson-pill unavail-pill';
       pill.title = STATUS_META.unavailable.label + (u.label ? ' · ' + u.label : '');
       const range = (u.startTime || '?') + '–' + (u.endTime || '?');
-      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META.unavailable.color}"></span><span><i class="ti ti-ban" style="font-size:10px;"></i> ${range}${u.label ? ' ' + u.label : ''}</span>`;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META.unavailable.color}"></span><span class="pill-label"><i class="ti ti-ban" style="font-size:10px;"></i> ${range}${u.label ? ' ' + u.label : ''}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); editUnavailability(u.id); };
       cell.appendChild(pill);
     });
@@ -1867,7 +1958,7 @@ function renderCalendar() {
       const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : status === 'cancelled' ? '✕ ' : isMoved ? '→ ' : '';
       const cat = lessonStatusCategory(status, isMoved);
       pill.title = STATUS_META[cat].label;
-      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span>${icon}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span class="pill-label">${icon}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
       cell.appendChild(pill);
     });

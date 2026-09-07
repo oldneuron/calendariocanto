@@ -1,7 +1,12 @@
-const CACHE = 'canto-v14';
+const CACHE = 'canto-v15';
 const PRECACHE = [
   './',
   './index.html',
+  './manifest.json',
+  './icon-32.png',
+  './icon-180.png',
+  './icon-192.png',
+  './icon-512.png',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css',
   'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/fonts/tabler-icons.woff2',
 ];

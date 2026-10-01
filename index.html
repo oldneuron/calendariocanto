@@ -558,6 +558,13 @@ if ('serviceWorker' in navigator) {
     .holiday-row { font-size: 14.5px; }
     .holiday-row .holiday-date { font-size: 12.5px; }
   }
+
+  /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
+  @media (min-width: 1024px) {
+    body { padding: 1.5rem 2rem; }
+    .container { max-width: none; }
+    .day-cell { min-height: 96px; }
+  }
 </style>
 </head>
 <body>

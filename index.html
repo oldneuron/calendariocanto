@@ -613,6 +613,14 @@ if ('serviceWorker' in navigator) {
     .pill-acts { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
   }
 
+  /* Settimana corrente: cella più alta, attività complete su più righe (da tablet in su) */
+  @media (min-width: 768px) {
+    .day-cell.week-now { min-height: 190px; }
+    .day-cell.week-now .pill-acts { display: block; overflow: visible; font-size: 12px; line-height: 1.4; margin-top: 2px; }
+    .day-cell.week-now .pill-acts div { padding: 1px 0; }
+    .day-cell.week-now .pill-acts .pa-min { color: var(--color-text-tertiary); }
+  }
+
   /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
   @media (min-width: 1024px) {
     body { padding: 1.5rem 2rem; }
@@ -2005,6 +2013,8 @@ function renderCalendar() {
   const daysInPrev = new Date(year, month, 0).getDate();
   const today = new Date(); today.setHours(0,0,0,0);
   const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
 
   // Get all lessons for this view
   const allLessons = getLessonsForCalendar(year, month);
@@ -2054,6 +2064,7 @@ function renderCalendar() {
     }
     if (otherMonth) cell.classList.add('other-month');
     if (cellDate.getTime() === today.getTime()) cell.classList.add('today');
+    if (cellDate >= weekStart && cellDate <= weekEnd) cell.classList.add('week-now');
 
     const numEl = document.createElement('div');
     numEl.className = 'day-num';
@@ -2117,7 +2128,12 @@ function renderCalendar() {
       if (hasActs) {
         const sum = document.createElement('div');
         sum.className = 'pill-acts';
-        sum.textContent = activities[origKey].map(a => a.t).join(' · ');
+        if (cell.classList.contains('week-now')) {
+          // settimana corrente: un'attività per riga, con i minuti, tutto leggibile
+          sum.innerHTML = activities[origKey].map(a => `<div>• ${escapeHtml(a.t)}${a.m ? ` <span class="pa-min">${a.m}'</span>` : ''}</div>`).join('');
+        } else {
+          sum.textContent = activities[origKey].map(a => a.t).join(' · ');
+        }
         sum.title = activities[origKey].map(a => '• ' + a.t + (a.m ? ' (' + a.m + ' min)' : '')).join('\n');
         sum.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
         cell.appendChild(sum);
@@ -2624,8 +2640,9 @@ const ACTIVITY_CATS = [
   { id: 'riscaldamento', label: 'Riscaldamento',    color: '#EF9F27' },
   { id: 'respirazione',  label: 'Respirazione',     color: '#33A76A' },
   { id: 'tecnica',       label: 'Tecnica vocale',   color: '#2158B0' },
-  { id: 'brano',         label: 'Brano / repertorio', color: '#C2410C' },
   { id: 'ascolto',       label: 'Ascolto / teoria', color: '#7C3AED' },
+  { id: 'brano',         label: 'Brano / repertorio', color: '#C2410C' },
+  { id: 'casa',          label: 'Esercizi da fare a casa', color: '#0E7490' },
   { id: 'altro',         label: 'Altro',            color: '#6B7280' },
 ];
 const MONTHS_IT_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];

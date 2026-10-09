@@ -613,6 +613,19 @@ if ('serviceWorker' in navigator) {
     .pill-acts { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
   }
 
+  /* ===== Durata lezione / recupero minuti ===== */
+  .duration-box { margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary); }
+  .duration-summary { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
+  .duration-summary b { color: var(--color-text-primary); }
+  .duration-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .duration-btn { flex: 1; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans); cursor: pointer; }
+  .duration-btn.primary { background: var(--accent-gradient); color: #fff; border-color: transparent; font-weight: 600; }
+  .duration-btn:disabled { opacity: 0.4; cursor: default; }
+  .duration-step { font-size: 12px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .duration-step input { width: 52px; font-size: 13px; font-family: var(--font-sans); padding: 6px 6px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); }
+  .duration-hint { font-size: 11.5px; margin-top: 6px; color: var(--color-text-tertiary); line-height: 1.4; }
+  .duration-hint.warn { color: #9a5b00; font-weight: 600; }
+
   /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
   @media (min-width: 1024px) {
     body { padding: 1.5rem 2rem; }
@@ -868,6 +881,19 @@ if ('serviceWorker' in navigator) {
       <button class="btn-move" onclick="openMoveLesson()"><i class="ti ti-calendar-move"></i> Sposta</button>
       <button class="btn-delete-lesson" onclick="deleteLesson()"><i class="ti ti-trash"></i> Elimina</button>
     </div>
+    <div class="duration-box" id="duration-box">
+      <div class="activities-head">
+        <span><i class="ti ti-clock-plus"></i> Durata e recupero minuti</span>
+        <span class="activities-time" id="duration-total"></span>
+      </div>
+      <div class="duration-summary" id="duration-summary"></div>
+      <div class="duration-controls" id="duration-controls">
+        <button type="button" class="duration-btn" id="extra-minus" onclick="changeExtra(-1)"></button>
+        <label class="duration-step">passo <input type="number" id="extra-step" min="5" max="120" step="5" value="15" oninput="renderDurationBox()"> min</label>
+        <button type="button" class="duration-btn primary" id="extra-plus" onclick="changeExtra(1)"></button>
+      </div>
+      <div class="duration-hint" id="duration-hint"></div>
+    </div>
     <div class="activities-box">
       <div class="activities-head">
         <span><i class="ti ti-music"></i> Attività della lezione</span>
@@ -1065,7 +1091,7 @@ let currentEndMode = 'never';
 // ---- School year helpers ----
 // A "school year" key is the calendar year in which it starts, e.g. "2025" = Sept 2025 - June 2026.
 function emptyYearData() {
-  return { students: [], nextId: 1, notes: {}, lessonStatus: {}, movedLessons: {}, deletedLessons: [], activities: {} };
+  return { students: [], nextId: 1, notes: {}, lessonStatus: {}, movedLessons: {}, deletedLessons: [], activities: {}, extraMinutes: {} };
 }
 
 function schoolYearKeyForDate(date) {
@@ -1119,6 +1145,7 @@ function migrateFlatToSchoolYears(flat) {
     movedLessons: flat.movedLessons || {},
     deletedLessons: flat.deletedLessons || [],
     activities: flat.activities || {},
+    extraMinutes: flat.extraMinutes || {},
   };
   return { schoolYears: obj, currentSchoolYear: key };
 }
@@ -1127,7 +1154,7 @@ function migrateFlatToSchoolYears(flat) {
 function commitActiveYear() {
   if (!currentSchoolYear) return;
   schoolYears[currentSchoolYear] = {
-    students, nextId, notes, lessonStatus, movedLessons, activities,
+    students, nextId, notes, lessonStatus, movedLessons, activities, extraMinutes,
     deletedLessons: [...deletedLessons],
   };
 }
@@ -1143,6 +1170,8 @@ function loadActiveYear(key) {
   movedLessons = d.movedLessons || {};
   deletedLessons = new Set(d.deletedLessons || []);
   activities = d.activities || {};
+  extraMinutes = d.extraMinutes || {};
+  _covCache = null;
   currentSchoolYear = key;
 }
 
@@ -1214,6 +1243,7 @@ function markUnsaved() {
 }
 
 function saveData() {
+  _covCache = null;
   // Keep localStorage as live session cache
   const d = getCurrentData();
   localStorage.setItem('cl_data', JSON.stringify(d));
@@ -1460,7 +1490,8 @@ window.addEventListener('beforeunload', function(e) {
 
 let schoolYears = {};
 let currentSchoolYear = null;
-let students, nextId, notes, lessonStatus, movedLessons, deletedLessons, activities;
+let students, nextId, notes, lessonStatus, movedLessons, deletedLessons, activities, extraMinutes;
+var _covCache = null;
 // Indisponibilità del docente (giorni/orari in cui non si danno lezioni):
 // non è legata a un singolo anno scolastico, vale per tutti.
 let unavailability = [];
@@ -1479,7 +1510,57 @@ if (loaded) {
   currentDate = new Date(2025, 8, 1);
 }
 
-function getStatus(key) { return lessonStatus[key] || 'normal'; }
+// Durata effettiva di una lezione: durata dell'allievo + minuti di recupero aggiunti.
+function lessonDuration(s, key) {
+  return (Number(s.duration) || 0) + ((extraMinutes && extraMinutes[key]) || 0);
+}
+
+// Recupero a minuti: una lezione "da recuperare" vale tanti minuti quanti la durata
+// dell'allievo; ogni minuto aggiunto alle altre sue lezioni (extraMinutes) li copre,
+// partendo dalla lezione persa più vecchia. Calcolato al volo e messo in cache fino
+// al prossimo salvataggio.
+function getMinuteCoverage() {
+  if (_covCache) return _covCache;
+  const per = {};
+  const slot = sid => (per[sid] = per[sid] || { given: 0, owed: [] });
+  Object.entries(extraMinutes || {}).forEach(([k, m]) => {
+    if (deletedLessons.has(k)) return;
+    slot(parseInt(k.split('_')[1])).given += Number(m) || 0;
+  });
+  Object.entries(lessonStatus || {}).forEach(([k, st]) => {
+    if (st !== 'makeup' || deletedLessons.has(k)) return;
+    const sid = parseInt(k.split('_')[1]);
+    const stu = students.find(x => x.id === sid);
+    if (!stu) return;
+    slot(sid).owed.push({ key: k, date: new Date(k.split('_')[0]), min: Number(stu.duration) || 0 });
+  });
+  const res = { byStudent: {}, byKey: {} };
+  Object.entries(per).forEach(([sid, o]) => {
+    o.owed.sort((a, b) => a.date - b.date);
+    let credit = o.given, owedTot = 0;
+    o.owed.forEach(e => {
+      owedTot += e.min;
+      const use = Math.min(credit, e.min);
+      credit -= use;
+      res.byKey[e.key] = { owed: e.min, covered: use, done: e.min > 0 && use >= e.min };
+    });
+    res.byStudent[sid] = { owed: owedTot, given: o.given, remaining: Math.max(0, owedTot - o.given) };
+  });
+  _covCache = res;
+  return res;
+}
+function isMinuteRecovered(key) {
+  if ((lessonStatus[key] || 'normal') !== 'makeup') return false;
+  const e = getMinuteCoverage().byKey[key];
+  return !!(e && e.done);
+}
+// Stato effettivo: una lezione "da recuperare" interamente coperta dai minuti
+// aggiunti diventa "recuperata".
+function getStatus(key) {
+  const st = lessonStatus[key] || 'normal';
+  if (st === 'makeup' && isMinuteRecovered(key)) return 'recovered';
+  return st;
+}
 
 // Build a flat list of all lesson occurrences for a given month view range.
 // Returns array of { origKey, student, idx, displayDate, displayTime, isMoved }
@@ -1636,8 +1717,8 @@ function computeLessonCounts(s) {
 
   // "In sospeso": stessa fonte della scheda "Da recuperare" (scansione diretta
   // di lessonStatus), per garanzia assoluta di coerenza tra i due conteggi.
-  Object.entries(lessonStatus).forEach(([key, status]) => {
-    if (status !== 'makeup') return;
+  Object.keys(lessonStatus).forEach(key => {
+    if (getStatus(key) !== 'makeup') return;
     if (parseInt(key.split('_')[1]) !== s.id) return;
     sospese++;
   });
@@ -1886,12 +1967,19 @@ function renderUpcoming() {
   }).join('');
 }
 
+// Testo "· 30 min residui" per le lezioni da recuperare parzialmente coperte.
+function makeupMinutesText(key) {
+  const e = getMinuteCoverage().byKey[key];
+  if (!e || !e.covered || e.done) return '';
+  return ` · ${e.owed - e.covered} min residui`;
+}
+
 function renderMakeup() {
   const el = document.getElementById('makeup-list');
   const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
   const makeupEntries = [];
-  Object.entries(lessonStatus).forEach(([key, status]) => {
-    if (status !== 'makeup') return;
+  Object.keys(lessonStatus).forEach(key => {
+    if (getStatus(key) !== 'makeup') return;
     const [dateStr, sidStr] = key.split('_');
     const sid = parseInt(sidStr);
     const s = students.find(x => x.id === sid);
@@ -1907,7 +1995,7 @@ function renderMakeup() {
       <i class="ti ti-refresh makeup-icon"></i>
       <div>
         <div class="makeup-name">${student.name.split(' ')[0]}</div>
-        <div class="makeup-date">${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}</div>
+        <div class="makeup-date">${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}${makeupMinutesText(key)}</div>
       </div>
       <div class="student-dot" style="background:${c.dot};flex-shrink:0;margin-left:auto"></div>
     </div>`;
@@ -1952,7 +2040,8 @@ function renderHistory() {
   const el = document.getElementById('history-list');
   const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
   const entries = [];
-  Object.entries(lessonStatus).forEach(([key, status]) => {
+  Object.keys(lessonStatus).forEach(key => {
+    const status = getStatus(key);
     if (status !== 'cancelled' && status !== 'makeup' && status !== 'recovered') return;
     if (historyFilter !== 'all' && status !== historyFilter) return;
     const [dateStr, sidStr] = key.split('_');
@@ -1973,6 +2062,9 @@ function renderHistory() {
     const badgeClass = status === 'cancelled' ? 'badge-cancelled' : status === 'makeup' ? 'badge-makeup' : 'badge-recovered';
     const badgeLabel = status === 'cancelled' ? 'Annullata' : status === 'makeup' ? 'Da recuperare' : 'Recuperata';
     let sub = '';
+    if (status === 'recovered' && !moved && isMinuteRecovered(key)) {
+      sub = `<div class="history-sub">Recuperata con minuti aggiunti ad altre lezioni</div>`;
+    }
     if (status === 'recovered' && moved) {
       const md = new Date(moved.date);
       sub = `<div class="history-sub">Recuperata il ${md.getDate()} ${months[md.getMonth()]} ${md.getFullYear()} · ${moved.time}</div>`;
@@ -2111,7 +2203,7 @@ function renderCalendar() {
       const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : status === 'cancelled' ? '✕ ' : isMoved ? '→ ' : '';
       const cat = lessonStatusCategory(status, isMoved);
       pill.title = STATUS_META[cat].label;
-      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span class="pill-label">${icon}${actMark}${noteDot}${s.name.split(' ')[0]} ${displayTime}</span>`;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span class="pill-label">${icon}${actMark}${noteDot}${s.name.split(' ')[0]} ${displayTime}${extraMinutes[origKey] ? ' +' + extraMinutes[origKey] + "'" : ''}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
       cell.appendChild(pill);
       if (hasActs) {
@@ -2597,20 +2689,19 @@ function openLesson(s, date, origKey, displayTime) {
     <strong>${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}</strong>
     ${isMoved ? '<span class="moved-badge">→ spostata</span>' : ''}
     ${status === 'recovered' ? '<span class="recovered-badge">✓ Recuperata</span>' : ''}<br>
-    Orario: ${currentLessonDisplayTime} · Durata: ${s.duration} min
+    Orario: ${currentLessonDisplayTime} · Durata: <span id="lesson-duration-text"></span>
   `;
   const btnC = document.getElementById('status-btn-cancelled');
   const btnM = document.getElementById('status-btn-makeup');
   btnC.className = status === 'cancelled' ? 'active-cancelled' : '';
   btnM.className = (status === 'makeup' || status === 'recovered') ? 'active-makeup' : '';
-  btnM.innerHTML = status === 'recovered'
-    ? '<i class="ti ti-refresh"></i> Recuperata (annulla)'
-    : '<i class="ti ti-refresh"></i> Da recuperare';
+  updateMakeupButton();
   document.getElementById('lesson-note').value = notes[currentLessonKey] || '';
   currentLessonDate = date;
   document.getElementById('activity-text').value = '';
   document.getElementById('activity-min').value = '';
   renderLessonActivities();
+  renderDurationBox();
   document.getElementById('modal-lesson').classList.add('open');
 }
 
@@ -2791,6 +2882,98 @@ function openRegistry(studentId) {
   document.getElementById('modal-registry').classList.add('open');
 }
 
+// ============================================================================
+// Durata della lezione e recupero a minuti
+// ============================================================================
+function currentExtraStep() {
+  const v = parseInt(document.getElementById('extra-step').value, 10);
+  return Math.max(1, Math.min(120, v || 15));
+}
+
+function lessonOverlapWarning() {
+  if (!currentLessonStudent || !currentLessonDate || !currentLessonDisplayTime) return '';
+  if (!(extraMinutes[currentLessonKey] > 0)) return '';
+  const start = timeToMinutes(currentLessonDisplayTime);
+  const end = start + lessonDuration(currentLessonStudent, currentLessonKey);
+  const clash = getBusyIntervalsForDate(currentLessonDate, currentLessonKey).find(b => b.start < end && b.end > start);
+  return clash ? `Attenzione: la lezione ora finisce alle ${minutesToTime(end)} e si sovrappone a quella di ${clash.label} (${minutesToTime(clash.start)}).` : '';
+}
+
+function renderDurationBox() {
+  const st = currentLessonStudent;
+  if (!st || !currentLessonKey) return;
+  const key = currentLessonKey;
+  const base = Number(st.duration) || 0;
+  const extra = extraMinutes[key] || 0;
+  const raw = lessonStatus[key] || 'normal';
+  const eff = getStatus(key);
+  const cov = getMinuteCoverage();
+  const stu = cov.byStudent[st.id];
+  const first = escapeHtml(st.name.split(' ')[0]);
+
+  const durTxt = document.getElementById('lesson-duration-text');
+  if (durTxt) durTxt.textContent = extra ? `${base + extra} min (${base} + ${extra} di recupero)` : `${base} min`;
+  document.getElementById('duration-box').style.display = eff === 'cancelled' ? 'none' : '';
+  document.getElementById('duration-total').textContent = extra ? `${base + extra} min` : '';
+
+  // Riepilogo minuti da recuperare per questo allievo
+  const sum = document.getElementById('duration-summary');
+  if (stu && stu.owed > 0) {
+    sum.innerHTML = stu.remaining > 0
+      ? `Da recuperare per ${first}: <b>${stu.owed} min</b> · già aggiunti ${stu.given} · restano <b>${stu.remaining} min</b>`
+      : `Tutti i minuti persi da ${first} (${stu.owed}) sono stati recuperati ✓`;
+  } else {
+    sum.textContent = `Nessun minuto da recuperare per ${first}.`;
+  }
+
+  // Controlli: non per una lezione persa e ancora da recuperare
+  const lost = raw === 'makeup' && eff === 'makeup';
+  const controls = document.getElementById('duration-controls');
+  const hint = document.getElementById('duration-hint');
+  const step = currentExtraStep();
+  if (raw === 'makeup') {
+    controls.style.display = 'none';
+    hint.className = 'duration-hint';
+    hint.textContent = lost
+      ? `Questa lezione è da recuperare: apri un'altra lezione di ${st.name.split(' ')[0]} e aggiungi minuti.`
+      : 'Recuperata con i minuti aggiunti alle altre lezioni.';
+    return;
+  }
+  controls.style.display = 'flex';
+  const remaining = stu ? stu.remaining : 0;
+  const plusN = remaining > 0 ? Math.min(step, remaining) : step;
+  const minusN = Math.min(step, extra);
+  document.getElementById('extra-plus').textContent = `+ Aggiungi ${plusN} min`;
+  const minus = document.getElementById('extra-minus');
+  minus.textContent = `− Togli ${minusN || step} min`;
+  minus.disabled = !extra;
+  const warn = lessonOverlapWarning();
+  if (warn) { hint.className = 'duration-hint warn'; hint.textContent = warn; }
+  else {
+    hint.className = 'duration-hint';
+    hint.textContent = remaining > 0
+      ? `Per recuperare tutto servono ancora ${Math.ceil(remaining / step)} aggiunte da ${step} min (l'ultima si calcola da sola).`
+      : '';
+  }
+}
+
+function changeExtra(sign) {
+  if (!currentLessonKey || !currentLessonStudent) return;
+  const step = currentExtraStep();
+  const cur = extraMinutes[currentLessonKey] || 0;
+  const stu = getMinuteCoverage().byStudent[currentLessonStudent.id];
+  let delta;
+  if (sign > 0) delta = (stu && stu.remaining > 0) ? Math.min(step, stu.remaining) : step;
+  else delta = -Math.min(step, cur);
+  if (!delta) return;
+  const next = cur + delta;
+  if (next > 0) extraMinutes[currentLessonKey] = next; else delete extraMinutes[currentLessonKey];
+  saveData();
+  updateMakeupButton();
+  renderDurationBox();
+  renderCalendar();
+}
+
 // ---- Suggerimenti di orari liberi per lo spostamento/recupero di una lezione ----
 function timeToMinutes(t) {
   const [h, m] = t.split(':').map(Number);
@@ -2815,7 +2998,7 @@ function getBusyIntervalsForDate(dateObj, excludeKey) {
     if (deletedLessons.has(origKey) || movedLessons[origKey]) return;
     if (getStatus(origKey) === 'cancelled') return;
     const start = timeToMinutes(s.time);
-    intervals.push({ start, end: start + s.duration, label: s.name.split(' ')[0] });
+    intervals.push({ start, end: start + lessonDuration(s, origKey), label: s.name.split(' ')[0] });
   });
   Object.entries(movedLessons).forEach(([origKey, mv]) => {
     if (origKey === excludeKey || mv.date !== isoStr) return;
@@ -2824,7 +3007,7 @@ function getBusyIntervalsForDate(dateObj, excludeKey) {
     const s = students.find(x => x.id === sid);
     if (!s) return;
     const start = timeToMinutes(mv.time);
-    intervals.push({ start, end: start + s.duration, label: s.name.split(' ')[0] });
+    intervals.push({ start, end: start + lessonDuration(s, origKey), label: s.name.split(' ')[0] });
   });
   return intervals.sort((a, b) => a.start - b.start);
 }
@@ -2878,7 +3061,7 @@ function renderMoveSuggestions() {
     return;
   }
   const dateObj = new Date(dateVal + 'T00:00:00');
-  const duration = currentLessonStudent.duration || 60;
+  const duration = lessonDuration(currentLessonStudent, currentLessonKey) || 60;
   const { allDayBlocked, slots } = computeFreeSlots(dateObj, duration, currentLessonKey);
   if (allDayBlocked) {
     box.innerHTML = '<span class="slot-hint slot-hint-warn"><i class="ti ti-ban"></i> Giornata non disponibile per un\'indisponibilità impostata</span>';
@@ -2952,6 +3135,7 @@ function deleteLesson() {
   delete movedLessons[currentLessonKey];
   delete notes[currentLessonKey];
   delete activities[currentLessonKey];
+  delete extraMinutes[currentLessonKey];
   saveData(); closeModal(); renderCalendar();
 }
 
@@ -2965,12 +3149,25 @@ function setLessonStatus(newStatus) {
   }
   const s = getStatus(currentLessonKey);
   document.getElementById('status-btn-cancelled').className = s === 'cancelled' ? 'active-cancelled' : '';
-  const btnM = document.getElementById('status-btn-makeup');
-  btnM.className = (s === 'makeup' || s === 'recovered') ? 'active-makeup' : '';
-  btnM.innerHTML = s === 'recovered'
-    ? '<i class="ti ti-refresh"></i> Recuperata (annulla)'
-    : '<i class="ti ti-refresh"></i> Da recuperare';
+  updateMakeupButton();
   saveData(); renderCalendar();
+  renderDurationBox();
+}
+
+// Pulsante "Da recuperare": se la lezione è stata recuperata con i minuti aggiunti
+// ad altre lezioni, non si annulla da qui (si tolgono i minuti dalle altre lezioni).
+function updateMakeupButton() {
+  const s = getStatus(currentLessonKey);
+  const btnM = document.getElementById('status-btn-makeup');
+  const byMinutes = isMinuteRecovered(currentLessonKey);
+  btnM.className = (s === 'makeup' || s === 'recovered') ? 'active-makeup' : '';
+  btnM.disabled = byMinutes;
+  btnM.title = byMinutes ? 'Recuperata con i minuti aggiunti alle altre lezioni: per riaprirla togli quei minuti' : '';
+  btnM.innerHTML = byMinutes
+    ? '<i class="ti ti-refresh"></i> Recuperata coi minuti'
+    : s === 'recovered'
+      ? '<i class="ti ti-refresh"></i> Recuperata (annulla)'
+      : '<i class="ti ti-refresh"></i> Da recuperare';
 }
 function saveNote() {
   const note = document.getElementById('lesson-note').value.trim();

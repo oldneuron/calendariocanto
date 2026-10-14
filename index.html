@@ -626,6 +626,23 @@ if ('serviceWorker' in navigator) {
   .duration-hint { font-size: 11.5px; margin-top: 6px; color: var(--color-text-tertiary); line-height: 1.4; }
   .duration-hint.warn { color: #9a5b00; font-weight: 600; }
 
+  /* ===== Compensi ===== */
+  .fees-month-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0 12px; font-weight: 600; font-size: 14px; }
+  .fees-month-nav button { background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); color: var(--color-text-secondary); padding: 6px 9px; cursor: pointer; display: flex; align-items: center; }
+  .fees-month-nav button:hover { background: var(--color-background-secondary); }
+  .fees-total { text-align: center; margin: 14px 0 4px; }
+  .fees-total-amount { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .fees-total-sub { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 3px; }
+  .fees-future { text-align: center; font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 10px; }
+  .fees-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .fees-row:last-child { border-bottom: none; }
+  .fees-row .fees-name { flex: 1; min-width: 0; font-weight: 500; }
+  .fees-row .fees-min { color: var(--color-text-tertiary); font-size: 12px; white-space: nowrap; }
+  .fees-row .fees-amt { min-width: 70px; text-align: right; font-weight: 600; }
+  .fees-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); margin: 14px 0 4px; }
+  .fees-note { font-size: 11.5px; line-height: 1.45; color: var(--color-text-tertiary); margin-top: 8px; }
+  .fees-item { font-size: 12px; color: var(--color-text-secondary); padding: 2px 0; line-height: 1.4; }
+
   /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
   @media (min-width: 1024px) {
     body { padding: 1.5rem 2rem; }
@@ -644,6 +661,7 @@ if ('serviceWorker' in navigator) {
       <button onclick="pullFromServerIfNewer()" title="Controlla aggiornamenti dal server" style="padding:4px 6px;"><i class="ti ti-refresh"></i></button>
       <span class="unsaved-dot visible" id="unsaved-dot" title="Modifiche non ancora sincronizzate"></span>
       <button id="install-btn" onclick="installPWA()"><i class="ti ti-device-mobile"></i> Installa</button>
+      <button onclick="openFees()"><i class="ti ti-currency-euro"></i> Compensi</button>
       <button onclick="document.getElementById('import-input').click()"><i class="ti ti-upload"></i> Importa</button>
       <button class="btn-export" onclick="exportFile()"><i class="ti ti-download"></i> Esporta</button>
     </div>
@@ -957,6 +975,23 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
+<!-- Modal compensi -->
+<div class="modal-overlay" id="modal-fees">
+  <div class="modal modal-lesson">
+    <h3><i class="ti ti-currency-euro"></i> Compensi</h3>
+    <div class="fees-month-nav">
+      <button type="button" onclick="feesShift(-1)" aria-label="Mese precedente"><i class="ti ti-chevron-left"></i></button>
+      <span id="fees-month-label"></span>
+      <button type="button" onclick="feesShift(1)" aria-label="Mese successivo"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="field"><label>Importo orario (€)</label><input type="number" id="fees-rate" min="0" step="0.5" inputmode="decimal" placeholder="Es. 25" oninput="onFeesRateInput()"></div>
+    <div id="fees-body"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal registro attività allievo -->
 <div class="modal-overlay" id="modal-registry">
   <div class="modal modal-lesson">
@@ -1091,7 +1126,7 @@ let currentEndMode = 'never';
 // ---- School year helpers ----
 // A "school year" key is the calendar year in which it starts, e.g. "2025" = Sept 2025 - June 2026.
 function emptyYearData() {
-  return { students: [], nextId: 1, notes: {}, lessonStatus: {}, movedLessons: {}, deletedLessons: [], activities: {}, extraMinutes: {} };
+  return { students: [], nextId: 1, notes: {}, lessonStatus: {}, movedLessons: {}, deletedLessons: [], activities: {}, extraMinutes: {}, hourlyRate: null };
 }
 
 function schoolYearKeyForDate(date) {
@@ -1146,6 +1181,7 @@ function migrateFlatToSchoolYears(flat) {
     deletedLessons: flat.deletedLessons || [],
     activities: flat.activities || {},
     extraMinutes: flat.extraMinutes || {},
+    hourlyRate: flat.hourlyRate != null ? flat.hourlyRate : null,
   };
   return { schoolYears: obj, currentSchoolYear: key };
 }
@@ -1154,7 +1190,7 @@ function migrateFlatToSchoolYears(flat) {
 function commitActiveYear() {
   if (!currentSchoolYear) return;
   schoolYears[currentSchoolYear] = {
-    students, nextId, notes, lessonStatus, movedLessons, activities, extraMinutes,
+    students, nextId, notes, lessonStatus, movedLessons, activities, extraMinutes, hourlyRate,
     deletedLessons: [...deletedLessons],
   };
 }
@@ -1171,6 +1207,7 @@ function loadActiveYear(key) {
   deletedLessons = new Set(d.deletedLessons || []);
   activities = d.activities || {};
   extraMinutes = d.extraMinutes || {};
+  hourlyRate = d.hourlyRate != null ? d.hourlyRate : null;
   _covCache = null;
   currentSchoolYear = key;
 }
@@ -1490,7 +1527,7 @@ window.addEventListener('beforeunload', function(e) {
 
 let schoolYears = {};
 let currentSchoolYear = null;
-let students, nextId, notes, lessonStatus, movedLessons, deletedLessons, activities, extraMinutes;
+let students, nextId, notes, lessonStatus, movedLessons, deletedLessons, activities, extraMinutes, hourlyRate;
 var _covCache = null;
 // Indisponibilità del docente (giorni/orari in cui non si danno lezioni):
 // non è legata a un singolo anno scolastico, vale per tutti.
@@ -1522,10 +1559,12 @@ function lessonDuration(s, key) {
 function getMinuteCoverage() {
   if (_covCache) return _covCache;
   const per = {};
-  const slot = sid => (per[sid] = per[sid] || { given: 0, owed: [] });
+  const slot = sid => (per[sid] = per[sid] || { given: 0, owed: [], extras: [] });
   Object.entries(extraMinutes || {}).forEach(([k, m]) => {
     if (deletedLessons.has(k)) return;
-    slot(parseInt(k.split('_')[1])).given += Number(m) || 0;
+    const o = slot(parseInt(k.split('_')[1]));
+    o.given += Number(m) || 0;
+    o.extras.push({ date: lessonActualDate(k), m: Number(m) || 0 });
   });
   Object.entries(lessonStatus || {}).forEach(([k, st]) => {
     if (st !== 'makeup' || deletedLessons.has(k)) return;
@@ -1537,12 +1576,21 @@ function getMinuteCoverage() {
   const res = { byStudent: {}, byKey: {} };
   Object.entries(per).forEach(([sid, o]) => {
     o.owed.sort((a, b) => a.date - b.date);
+    o.extras.sort((a, b) => a.date - b.date);
     let credit = o.given, owedTot = 0;
     o.owed.forEach(e => {
       owedTot += e.min;
       const use = Math.min(credit, e.min);
       credit -= use;
-      res.byKey[e.key] = { owed: e.min, covered: use, done: e.min > 0 && use >= e.min };
+      const done = e.min > 0 && use >= e.min;
+      // Data in cui il recupero si completa: la lezione (in ordine di data) che
+      // porta i minuti aggiunti a coprire per intero questa lezione persa.
+      let completedOn = null;
+      if (done) {
+        let acc = 0;
+        for (const x of o.extras) { acc += x.m; if (acc >= owedTot) { completedOn = x.date; break; } }
+      }
+      res.byKey[e.key] = { owed: e.min, covered: use, done, completedOn };
     });
     res.byStudent[sid] = { owed: owedTot, given: o.given, remaining: Math.max(0, owedTot - o.given) };
   });
@@ -2972,6 +3020,112 @@ function changeExtra(sign) {
   updateMakeupButton();
   renderDurationBox();
   renderCalendar();
+}
+
+// ============================================================================
+// Compensi: importo orario x ore di lezione erogate nel mese.
+// Regole: le lezioni perse (da recuperare) o annullate non contano; una lezione
+// recuperata spostandola conta alla nuova data; una lezione recuperata con minuti
+// aggiunti ad altre lezioni conta per intero (es. 45 min) alla data in cui il
+// recupero si completa, mentre i minuti aggiunti in sé non si contano. Nelle
+// lezioni normali si conta sempre la durata base dell'allievo.
+// ============================================================================
+var feesYear = null, feesMonth = null;
+
+function computeMonthlyFees(year, month) {
+  const todayNum = dayNum(new Date());
+  const per = new Map();
+  const recoveries = [];
+  const add = (stu, mins, date) => {
+    const e = per.get(stu.id) || { student: stu, done: 0, future: 0 };
+    if (dayNum(date) <= todayNum) e.done += mins; else e.future += mins;
+    per.set(stu.id, e);
+  };
+  getLessonsForCalendar(year, month).forEach(l => {
+    const d = l.displayDate;
+    if (d.getFullYear() !== year || d.getMonth() !== month) return;
+    const raw = lessonStatus[l.origKey] || 'normal';
+    if (raw === 'cancelled' || raw === 'makeup') return;
+    add(l.student, Number(l.student.duration) || 0, d);
+  });
+  Object.entries(getMinuteCoverage().byKey).forEach(([key, e]) => {
+    if (!e.done || !e.completedOn) return;
+    const d = e.completedOn;
+    if (d.getFullYear() !== year || d.getMonth() !== month) return;
+    const stu = students.find(x => x.id === parseInt(key.split('_')[1]));
+    if (!stu) return;
+    add(stu, e.owed, d);
+    recoveries.push({ student: stu, minutes: e.owed, lostDate: new Date(key.split('_')[0]), completedOn: d, delivered: dayNum(d) <= todayNum });
+  });
+  const rows = [...per.values()].sort((a, b) => a.student.name.localeCompare(b.student.name, 'it'));
+  const done = rows.reduce((n, r) => n + r.done, 0);
+  const future = rows.reduce((n, r) => n + r.future, 0);
+  return { rows, done, future, recoveries };
+}
+
+function fmtHM(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h && m ? `${h} h ${m} min` : h ? `${h} h` : `${m} min`;
+}
+function fmtEuro(x) { return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(x); }
+
+function openFees() {
+  feesYear = currentDate.getFullYear();
+  feesMonth = currentDate.getMonth();
+  document.getElementById('fees-rate').value = hourlyRate != null ? hourlyRate : '';
+  renderFees();
+  document.getElementById('modal-fees').classList.add('open');
+}
+
+function feesShift(delta) {
+  const d = new Date(feesYear, feesMonth + delta, 1);
+  feesYear = d.getFullYear();
+  feesMonth = d.getMonth();
+  renderFees();
+}
+
+function onFeesRateInput() {
+  const v = parseFloat(document.getElementById('fees-rate').value);
+  hourlyRate = v >= 0 ? v : null;
+  saveData();
+  renderFees();
+}
+
+function renderFees() {
+  const rate = Number(hourlyRate) > 0 ? Number(hourlyRate) : 0;
+  const f = computeMonthlyFees(feesYear, feesMonth);
+  document.getElementById('fees-month-label').textContent = `${MONTHS_IT_LONG[feesMonth].charAt(0).toUpperCase() + MONTHS_IT_LONG[feesMonth].slice(1)} ${feesYear}`;
+  const money = mins => rate ? fmtEuro(mins / 60 * rate) : '—';
+  let html = `<div class="fees-total">
+      <div class="fees-total-amount">${rate ? money(f.done) : fmtHM(f.done)}</div>
+      <div class="fees-total-sub">${rate ? fmtHM(f.done) + ' erogate' : 'Inserisci l\'importo orario per vedere il totale'}</div>
+    </div>`;
+  if (f.future > 0) {
+    html += `<div class="fees-future">Previsto a fine mese: ${rate ? money(f.done + f.future) + ' · ' : ''}${fmtHM(f.done + f.future)} (se si svolgono tutte le lezioni rimaste)</div>`;
+  }
+  if (f.rows.length) {
+    html += '<div class="fees-title">Per allievo</div>' + f.rows.map(r =>
+      `<div class="fees-row"><span class="fees-name">${escapeHtml(r.student.name)}</span><span class="fees-min">${fmtHM(r.done)}</span><span class="fees-amt">${money(r.done)}</span></div>`
+    ).join('');
+  } else {
+    html += '<p class="activity-empty" style="text-align:center;margin-top:10px;">Nessuna lezione conteggiata in questo mese.</p>';
+  }
+  if (f.recoveries.length) {
+    html += '<div class="fees-title">Recuperi completati nel mese</div>' + f.recoveries.map(r =>
+      `<div class="fees-item">${escapeHtml(r.student.name.split(' ')[0])} · lezione persa del ${fmtDateShort(r.lostDate)} (${r.minutes} min) ${r.delivered ? 'recuperata' : 'si completerà'} il ${fmtDateShort(r.completedOn)}</div>`
+    ).join('');
+  }
+  // Recuperi ancora aperti e minuti in eccesso: non contati, ma da sapere
+  const cov = getMinuteCoverage();
+  const open = Object.entries(cov.byStudent).filter(([, v]) => v.remaining > 0)
+    .map(([sid, v]) => { const st = students.find(x => x.id === parseInt(sid)); return st ? `${escapeHtml(st.name.split(' ')[0])}: ${v.remaining} min` : ''; }).filter(Boolean);
+  const extra = Object.entries(cov.byStudent).filter(([, v]) => v.given > v.owed)
+    .map(([sid, v]) => { const st = students.find(x => x.id === parseInt(sid)); return st ? `${escapeHtml(st.name.split(' ')[0])}: ${v.given - v.owed} min` : ''; }).filter(Boolean);
+  let notes2 = 'Non contate: lezioni perse o annullate. Un recupero conta per intero nel giorno in cui si completa; i minuti aggiunti alle singole lezioni non si contano a parte.';
+  if (open.length) notes2 += `<br>Recuperi ancora in corso (non contati): ${open.join(', ')}.`;
+  if (extra.length) notes2 += `<br>Minuti aggiunti oltre quelli da recuperare (non contati): ${extra.join(', ')}.`;
+  html += `<div class="fees-note">${notes2}</div>`;
+  document.getElementById('fees-body').innerHTML = html;
 }
 
 // ---- Suggerimenti di orari liberi per lo spostamento/recupero di una lezione ----

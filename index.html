@@ -3037,8 +3037,8 @@ function computeMonthlyFees(year, month) {
   const per = new Map();
   const recoveries = [];
   const add = (stu, mins, date) => {
-    const e = per.get(stu.id) || { student: stu, done: 0, future: 0 };
-    if (dayNum(date) <= todayNum) e.done += mins; else e.future += mins;
+    const e = per.get(stu.id) || { student: stu, done: 0, future: 0, doneN: 0, futureN: 0 };
+    if (dayNum(date) <= todayNum) { e.done += mins; e.doneN++; } else { e.future += mins; e.futureN++; }
     per.set(stu.id, e);
   };
   getLessonsForCalendar(year, month).forEach(l => {
@@ -3060,13 +3060,15 @@ function computeMonthlyFees(year, month) {
   const rows = [...per.values()].sort((a, b) => a.student.name.localeCompare(b.student.name, 'it'));
   const done = rows.reduce((n, r) => n + r.done, 0);
   const future = rows.reduce((n, r) => n + r.future, 0);
-  return { rows, done, future, recoveries };
+  const doneN = rows.reduce((n, r) => n + r.doneN, 0);
+  return { rows, done, future, doneN, recoveries };
 }
 
 function fmtHM(mins) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return h && m ? `${h} h ${m} min` : h ? `${h} h` : `${m} min`;
 }
+function fmtLessons(n) { return n === 1 ? '1 lezione' : `${n} lezioni`; }
 function fmtEuro(x) { return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(x); }
 
 function openFees() {
@@ -3098,14 +3100,14 @@ function renderFees() {
   const money = mins => rate ? fmtEuro(mins / 60 * rate) : '—';
   let html = `<div class="fees-total">
       <div class="fees-total-amount">${rate ? money(f.done) : fmtHM(f.done)}</div>
-      <div class="fees-total-sub">${rate ? fmtHM(f.done) + ' erogate' : 'Inserisci l\'importo orario per vedere il totale'}</div>
+      <div class="fees-total-sub">${fmtLessons(f.doneN)} · ${fmtHM(f.done)} erogate${rate ? '' : '<br>Inserisci l\'importo orario per vedere il totale'}</div>
     </div>`;
   if (f.future > 0) {
     html += `<div class="fees-future">Previsto a fine mese: ${rate ? money(f.done + f.future) + ' · ' : ''}${fmtHM(f.done + f.future)} (se si svolgono tutte le lezioni rimaste)</div>`;
   }
   if (f.rows.length) {
     html += '<div class="fees-title">Per allievo</div>' + f.rows.map(r =>
-      `<div class="fees-row"><span class="fees-name">${escapeHtml(r.student.name)}</span><span class="fees-min">${fmtHM(r.done)}</span><span class="fees-amt">${money(r.done)}</span></div>`
+      `<div class="fees-row"><span class="fees-name">${escapeHtml(r.student.name)}</span><span class="fees-min">${fmtLessons(r.doneN)}</span><span class="fees-min">${fmtHM(r.done)}</span><span class="fees-amt">${money(r.done)}</span></div>`
     ).join('');
   } else {
     html += '<p class="activity-empty" style="text-align:center;margin-top:10px;">Nessuna lezione conteggiata in questo mese.</p>';

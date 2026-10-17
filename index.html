@@ -643,6 +643,13 @@ if ('serviceWorker' in navigator) {
   .fees-note { font-size: 11.5px; line-height: 1.45; color: var(--color-text-tertiary); margin-top: 8px; }
   .fees-item { font-size: 12px; color: var(--color-text-secondary); padding: 2px 0; line-height: 1.4; }
 
+  /* ===== Lezione di prova / cambio orario ===== */
+  .trial-intro { font-size: 12.5px; color: var(--color-text-secondary); margin: -4px 0 10px; line-height: 1.45; }
+  .trial-box { margin-top: 14px; padding: 10px 12px; border: 0.5px dashed var(--color-border-secondary); border-radius: var(--border-radius-md); font-size: 12.5px; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 8px; }
+  .trial-convert-btn { margin-top: 6px; background: var(--accent-gradient); color: #fff; border: none; border-radius: var(--border-radius-md); padding: 5px 10px; font-size: 12px; font-family: var(--font-sans); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .sched-scope-hint { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 5px; line-height: 1.4; }
+  .student-time.sched-future { color: var(--accent-solid); }
+
   /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
   @media (min-width: 1024px) {
     body { padding: 1.5rem 2rem; }
@@ -711,6 +718,7 @@ if ('serviceWorker' in navigator) {
       <h3><i class="ti ti-users"></i> Allievi</h3>
       <div id="students-list"></div>
       <button class="add-btn" onclick="openAddStudent()"><i class="ti ti-plus"></i> Aggiungi allievo</button>
+      <button class="add-btn" onclick="openTrialModal()" style="margin-top:6px;"><i class="ti ti-sparkles"></i> Lezione di prova</button>
       <button class="link-btn" onclick="downloadStudentList()" style="display:block;margin-top:8px;">Scarica elenco allievi (CSV) →</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
@@ -793,6 +801,15 @@ if ('serviceWorker' in navigator) {
         </select>
       </div>
       <div class="field"><label>Orario</label><input type="time" id="s-time" value="10:00"></div>
+      <div class="field" id="sched-scope-field" style="display:none">
+        <label>Le modifiche a giorno, orario e durata valgono</label>
+        <div class="end-toggle">
+          <button type="button" id="scope-from-btn" class="active" onclick="setSchedScope('from')">Da una data in poi</button>
+          <button type="button" id="scope-always-btn" onclick="setSchedScope('always')">Da sempre (correggi)</button>
+        </div>
+        <div id="scope-from-field" style="margin-top:6px;"><input type="date" id="s-scope-date"></div>
+        <div class="sched-scope-hint" id="scope-hint">Le lezioni prima di questa data restano com'erano.</div>
+      </div>
       <div class="field">
         <label>Fine ricorrenza</label>
         <div class="end-toggle">
@@ -899,6 +916,10 @@ if ('serviceWorker' in navigator) {
       <button class="btn-move" onclick="openMoveLesson()"><i class="ti ti-calendar-move"></i> Sposta</button>
       <button class="btn-delete-lesson" onclick="deleteLesson()"><i class="ti ti-trash"></i> Elimina</button>
     </div>
+    <div class="trial-box" id="trial-box" style="display:none">
+      <div><i class="ti ti-sparkles"></i> <b>Lezione di prova gratuita</b> · non conta nei compensi</div>
+      <button type="button" class="duration-btn primary" id="trial-convert-btn" onclick="convertCurrentTrial()"><i class="ti ti-user-plus"></i> Trasforma in allievo fisso</button>
+    </div>
     <div class="duration-box" id="duration-box">
       <div class="activities-head">
         <span><i class="ti ti-clock-plus"></i> Durata e recupero minuti</span>
@@ -971,6 +992,25 @@ if ('serviceWorker' in navigator) {
     <div id="history-list"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeHistoryModal()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal lezione di prova -->
+<div class="modal-overlay" id="modal-trial">
+  <div class="modal">
+    <h3><i class="ti ti-sparkles"></i> Lezione di prova</h3>
+    <p class="trial-intro">Lezione singola e gratuita. Il nome si può lasciare vuoto e compilare dopo, quando la prova diventa un allievo fisso.</p>
+    <div class="field"><label>Nome (facoltativo)</label><input type="text" id="t-name" placeholder="es. Mario Bianchi"></div>
+    <div class="field"><label>Telefono (facoltativo)</label><input type="tel" id="t-phone" placeholder="es. 333 1234567"></div>
+    <div class="field"><label>Data</label><input type="date" id="t-date"></div>
+    <div class="field"><label>Orario</label><input type="time" id="t-time" value="17:00"></div>
+    <div class="field"><label>Durata</label>
+      <select id="t-duration"><option value="30">30 min</option><option value="45" selected>45 min</option><option value="60">60 min</option><option value="90">90 min</option></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Annulla</button>
+      <button class="btn-primary" onclick="saveTrial()">Aggiungi</button>
     </div>
   </div>
 </div>
@@ -1068,10 +1108,11 @@ function getNextLessonForStudent(s, rangeDays = 60) {
   let best = null;
   const cur = new Date(today);
   while (cur <= rangeEnd) {
-    if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+    const sl = lessonSlotOn(s, cur);
+    if (sl) {
       const origKey = cur.toDateString() + '_' + s.id;
       if (!deletedLessons.has(origKey) && !movedLessons[origKey] && getStatus(origKey) === 'normal') {
-        best = { date: new Date(cur), time: s.time };
+        best = { date: new Date(cur), time: sl.time };
         break;
       }
     }
@@ -1472,7 +1513,7 @@ function downloadStudentList() {
   const rows = students
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name, 'it'))
-    .map(s => [s.name, s.phone || '', DAYS_IT[s.day], s.time, s.duration]);
+    .map(s => { const sl = currentSlot(s); return [s.name, s.phone || '', sl ? DAYS_IT[sl.day] : 'Prova', sl ? sl.time : '', sl ? sl.duration : s.duration]; });
   const csv = '\uFEFF' + [header, ...rows].map(r => r.map(escapeCsv).join(';')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -1570,8 +1611,9 @@ function getMinuteCoverage() {
     if (st !== 'makeup' || deletedLessons.has(k)) return;
     const sid = parseInt(k.split('_')[1]);
     const stu = students.find(x => x.id === sid);
-    if (!stu) return;
-    slot(sid).owed.push({ key: k, date: new Date(k.split('_')[0]), min: Number(stu.duration) || 0 });
+    if (!stu || isTrialKey(k)) return;
+    const lostDate = new Date(k.split('_')[0]);
+    slot(sid).owed.push({ key: k, date: lostDate, min: Number(studentAt(stu, lostDate).duration) || 0 });
   });
   const res = { byStudent: {}, byKey: {} };
   Object.entries(per).forEach(([sid, o]) => {
@@ -1625,13 +1667,14 @@ function getLessonsForCalendar(year, month) {
   students.forEach((s, idx) => {
     const cur = new Date(rangeStart);
     while (cur <= rangeEnd) {
-      if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+      const sl = lessonSlotOn(s, cur);
+      if (sl) {
         const origKey = cur.toDateString() + '_' + s.id;
         if (!deletedLessons.has(origKey)) {
           if (movedLessons[origKey]) {
             // This slot was moved — skip original position, will render at new position
           } else {
-            results.push({ origKey, student: s, idx, displayDate: new Date(cur), displayTime: s.time, isMoved: false });
+            results.push({ origKey, student: studentAt(s, cur), idx, displayDate: new Date(cur), displayTime: sl.time, isMoved: false });
           }
         }
       }
@@ -1647,13 +1690,57 @@ function getLessonsForCalendar(year, month) {
     const s = students.find(x => x.id === sid);
     if (!s || deletedLessons.has(origKey)) return;
     const idx = students.indexOf(s);
-    results.push({ origKey, student: s, idx, displayDate: newDate, displayTime: newTime, isMoved: true });
+    results.push({ origKey, student: studentAt(s, new Date(origKey.split('_')[0])), idx, displayDate: newDate, displayTime: newTime, isMoved: true });
   });
 
   return results;
 }
 
 function getColor(idx) { return COLORS[idx % COLORS.length]; }
+
+// ---- Orario di un allievo: cambi "da una data in poi" e lezioni singole (prova) ----
+// s.day / s.time / s.duration = orario di partenza; s.changes = [{from, day, time, duration}]
+// in ordine di data: da quella data in poi vale il nuovo orario, prima restano i vecchi.
+// s.oneOff = [{date, time, duration, trial}]: lezioni singole (es. prova gratuita).
+// Un allievo con s.day == null non ha ricorrenza (è ancora solo una prova).
+function recurringSlotAt(s, date) {
+  if (s.day == null) return null;
+  let slot = { day: s.day, time: s.time, duration: s.duration };
+  const iso = toISODateLocal(date);
+  (s.changes || []).forEach(c => { if (c.from <= iso) slot = { day: c.day, time: c.time, duration: c.duration }; });
+  return slot;
+}
+function oneOffAt(s, date) {
+  if (!s.oneOff || !s.oneOff.length) return null;
+  const iso = toISODateLocal(date);
+  return s.oneOff.find(o => o.date === iso) || null;
+}
+// Lezione dell'allievo in quella data (singola/prova oppure ricorrente attiva), o null.
+function lessonSlotOn(s, date) {
+  const o = oneOffAt(s, date);
+  if (o) return { day: date.getDay(), time: o.time, duration: o.duration, trial: !!o.trial };
+  const r = recurringSlotAt(s, date);
+  if (r && r.day === date.getDay() && isLessonActive(s, date)) return { day: r.day, time: r.time, duration: r.duration, trial: false };
+  return null;
+}
+// Copia dell'allievo con giorno/orario/durata e flag prova validi per quella data.
+function studentAt(s, date) {
+  const o = oneOffAt(s, date);
+  if (o) return { ...s, day: date.getDay(), time: o.time, duration: o.duration, _trial: !!o.trial };
+  const r = recurringSlotAt(s, date);
+  return r ? { ...s, day: r.day, time: r.time, duration: r.duration } : { ...s };
+}
+function currentSlot(s) { return recurringSlotAt(s, new Date()); }
+function isTrialKey(key) {
+  const st = students.find(x => x.id === parseInt(key.split('_')[1]));
+  if (!st) return false;
+  const o = oneOffAt(st, new Date(key.split('_')[0]));
+  return !!(o && o.trial);
+}
+function pillName(st) {
+  const first = st.name.split(' ')[0];
+  return st._trial ? (st.name === 'Prova' ? 'Prova' : 'Prova ' + first) : first;
+}
 
 // Returns true if a lesson on `date` is within the student's active window
 function isLessonActive(s, date) {
@@ -1671,14 +1758,17 @@ function isLessonActive(s, date) {
   }
   if (s.endMode === 'count') {
     if (!s.endCount) return true;
-    // Count occurrences from startDate (or 2020 fallback) up to and including date
+    // Count occurrences from startDate (or 2020 fallback) up to and including date,
+    // following the schedule in force on each day (day changes included)
     const startRef = s.startDate ? new Date(s.startDate + 'T00:00:00') : new Date(2020, 0, 1);
-    let first = new Date(startRef);
-    while (first.getDay() !== s.day) first.setDate(first.getDate() + 1);
     const target = new Date(date); target.setHours(0,0,0,0);
     let count = 0;
-    const cur = new Date(first);
-    while (cur <= target) { count++; cur.setDate(cur.getDate() + 7); }
+    const cur = new Date(startRef);
+    while (cur <= target) {
+      const r = recurringSlotAt(s, cur);
+      if (r && r.day === cur.getDay()) count++;
+      cur.setDate(cur.getDate() + 1);
+    }
     return count <= s.endCount;
   }
   return true;
@@ -1740,23 +1830,23 @@ function computeLessonCounts(s) {
 
   if (countStart) {
     const cur = new Date(countStart);
-    while (cur.getDay() !== s.day) cur.setDate(cur.getDate() + 1);
     while (cur <= today) {
-      if (isLessonActive(s, cur)) {
+      const r = recurringSlotAt(s, cur);
+      if (r && r.day === cur.getDay() && isLessonActive(s, cur) && !oneOffAt(s, cur)) {
         const origKey = cur.toDateString() + '_' + s.id;
         if (!deletedLessons.has(origKey) && !movedLessons[origKey]) {
           const outcome = occurrenceOutcome(origKey);
           if (outcome !== 'skip') { previste++; if (outcome === 'delivered') erogate++; }
         }
       }
-      cur.setDate(cur.getDate() + 7);
+      cur.setDate(cur.getDate() + 1);
     }
   }
 
   // Lezioni spostate: contano (se dovute) alla nuova data, quando già passata.
   Object.entries(movedLessons).forEach(([origKey, mv]) => {
     if (parseInt(origKey.split('_')[1]) !== s.id) return;
-    if (deletedLessons.has(origKey)) return;
+    if (deletedLessons.has(origKey) || isTrialKey(origKey)) return;
     const newDate = new Date(mv.date + 'T00:00:00');
     if (newDate > today) return;
     const outcome = occurrenceOutcome(origKey);
@@ -1767,14 +1857,29 @@ function computeLessonCounts(s) {
   // di lessonStatus), per garanzia assoluta di coerenza tra i due conteggi.
   Object.keys(lessonStatus).forEach(key => {
     if (getStatus(key) !== 'makeup') return;
-    if (parseInt(key.split('_')[1]) !== s.id) return;
+    if (parseInt(key.split('_')[1]) !== s.id || isTrialKey(key)) return;
     sospese++;
   });
 
   return { previste, erogate, sospese };
 }
 
+function studentTimeLine(s) {
+  const sl = currentSlot(s);
+  if (sl) return `${DAYS_IT[sl.day]} · ${sl.time} · ${sl.duration} min`;
+  const o = (s.oneOff || [])[0];
+  return o ? `Lezione di prova · ${fmtDateShort(new Date(o.date + 'T12:00:00'))} · ${o.time} · ${o.duration} min` : 'Nessuna lezione';
+}
+// Nota sotto l'orario se è già programmato un cambio futuro.
+function studentFutureChange(s) {
+  const todayIso = toISODateLocal(new Date());
+  const c = (s.changes || []).find(x => x.from > todayIso);
+  if (!c) return '';
+  return `<div class="student-time sched-future"><i class="ti ti-arrow-right" style="font-size:10px;"></i> Dal ${fmtDateShort(new Date(c.from + 'T12:00:00'))}: ${DAYS_IT[c.day]} · ${c.time} · ${c.duration} min</div>`;
+}
+
 function lessonCountBadge(s) {
+  if (s.day == null) return `<span class="end-badge" title="Lezione di prova gratuita: non conta nei compensi">Prova gratuita</span>`;
   const { previste, erogate, sospese } = computeLessonCounts(s);
   if (previste === 0) {
     return `<span class="end-badge" title="Nessuna lezione ancora conteggiata (le lezioni future non vengono contate finché non arriva la loro data)">0 lezioni finora</span>`;
@@ -1957,8 +2062,10 @@ function renderStudents() {
       <div class="student-avatar" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${initials}</div>
       <div class="student-info">
         <div class="student-name">${s.name}${lbl ? ` <span class="end-badge active-end">${lbl}</span>` : ''}</div>
-        <div class="student-time">${DAYS_IT[s.day]} · ${s.time} · ${s.duration} min</div>
+        <div class="student-time">${studentTimeLine(s)}</div>
+        ${studentFutureChange(s)}
         <div class="student-time" style="margin-top:2px;">${lessonCountBadge(s)}</div>
+        ${s.day == null ? `<button type="button" class="trial-convert-btn" onclick="event.stopPropagation(); editStudent(${s.id})"><i class="ti ti-user-plus"></i> Trasforma in allievo fisso</button>` : ''}
         ${s.phone ? `<div class="student-time"><i class="ti ti-phone" style="font-size:10px;"></i> ${s.phone}</div>` : ''}
       </div>
       <button type="button" class="student-reg-btn" onclick="event.stopPropagation(); openRegistry(${s.id})" title="Registro attività" aria-label="Registro attività"><i class="ti ti-book-2"></i></button>
@@ -1977,10 +2084,11 @@ function renderUpcoming() {
   students.forEach((s, idx) => {
     const cur = new Date(today);
     while (cur <= rangeEnd) {
-      if (cur.getDay() === s.day && isLessonActive(s, cur)) {
+      const sl = lessonSlotOn(s, cur);
+      if (sl) {
         const origKey = cur.toDateString() + '_' + s.id;
         if (!deletedLessons.has(origKey) && !movedLessons[origKey] && getStatus(origKey) === 'normal') {
-          upcoming.push({ date: new Date(cur), student: s, idx, time: s.time });
+          upcoming.push({ date: new Date(cur), student: s, idx, time: sl.time });
         }
       }
       cur.setDate(cur.getDate() + 1);
@@ -2057,10 +2165,12 @@ function openLessonFromKey(key) {
   const s = students.find(x => x.id === sid);
   if (!s) return;
   const moved = movedLessons[key];
-  const displayDate = moved ? new Date(moved.date) : new Date(dateStr);
-  const displayTime = moved ? moved.time : s.time;
+  const origDate = new Date(dateStr);
+  const displayDate = moved ? new Date(moved.date) : origDate;
+  const slotOrig = lessonSlotOn(s, origDate) || recurringSlotAt(s, origDate) || { time: s.time };
+  const displayTime = moved ? moved.time : slotOrig.time;
   closeHistoryModal();
-  openLesson(s, displayDate, key, displayTime);
+  openLesson(studentAt(s, origDate), displayDate, key, displayTime);
 }
 
 let historyFilter = 'all';
@@ -2251,7 +2361,7 @@ function renderCalendar() {
       const icon = status === 'recovered' ? '✓ ' : status === 'makeup' ? '↺ ' : status === 'cancelled' ? '✕ ' : isMoved ? '→ ' : '';
       const cat = lessonStatusCategory(status, isMoved);
       pill.title = STATUS_META[cat].label;
-      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span class="pill-label">${icon}${actMark}${noteDot}${s.name.split(' ')[0]} ${displayTime}${extraMinutes[origKey] ? ' +' + extraMinutes[origKey] + "'" : ''}</span>`;
+      pill.innerHTML = `<span class="status-dot" style="background:${STATUS_META[cat].color}"></span><span class="pill-label">${icon}${actMark}${noteDot}${pillName(s)} ${displayTime}${extraMinutes[origKey] ? ' +' + extraMinutes[origKey] + "'" : ''}</span>`;
       pill.onclick = (e) => { e.stopPropagation(); openLesson(s, cellDate, origKey, displayTime); };
       cell.appendChild(pill);
       if (hasActs) {
@@ -2305,7 +2415,7 @@ function getKnownStudents() {
   Object.values(schoolYears).forEach(yearData => {
     (yearData.students || []).forEach(s => {
       const key = (s.name || '').trim().toLowerCase();
-      if (!key) return;
+      if (!key || (s.pendingTrial && s.name === 'Prova')) return;
       const existing = map.get(key);
       if (!existing || (s.phone && !existing.phone)) {
         map.set(key, { name: s.name.trim(), phone: s.phone || '' });
@@ -2369,6 +2479,7 @@ function openAddStudent() {
   document.getElementById('s-time').value = '10:00';
   document.getElementById('s-duration').value = '60';
   document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('sched-scope-field').style.display = 'none';
   populateYearSelect();
   document.getElementById('s-startpreset').addEventListener('change', applyPresetToEnd);
   document.getElementById('s-startyear').addEventListener('change', applyPresetToEnd);
@@ -2386,29 +2497,61 @@ function editStudent(id) {
   const s = students.find(x => x.id === id);
   if (!s) return;
   editingId = id;
-  document.getElementById('modal-title').textContent = 'Modifica allievo';
+  const converting = s.day == null;           // lezione di prova da trasformare in allievo fisso
+  const slot = currentSlot(s);
+  const trial0 = (s.oneOff || [])[0];
+  document.getElementById('modal-title').textContent = converting ? 'Trasforma in allievo fisso' : 'Modifica allievo';
   populateStudentPicker();
-  document.getElementById('s-name').value = s.name;
+  document.getElementById('s-name').value = (converting && s.name === 'Prova') ? '' : s.name;
   document.getElementById('s-phone').value = s.phone || '';
-  document.getElementById('s-day').value = s.day;
-  document.getElementById('s-time').value = s.time;
-  document.getElementById('s-duration').value = s.duration;
+  if (converting) {
+    const td = trial0 ? new Date(trial0.date + 'T00:00:00') : new Date();
+    document.getElementById('s-day').value = td.getDay();
+    document.getElementById('s-time').value = trial0 ? trial0.time : '10:00';
+    document.getElementById('s-duration').value = trial0 ? trial0.duration : s.duration;
+  } else {
+    document.getElementById('s-day').value = slot.day;
+    document.getElementById('s-time').value = slot.time;
+    document.getElementById('s-duration').value = slot.duration;
+  }
+  document.getElementById('sched-scope-field').style.display = converting ? 'none' : 'block';
+  document.getElementById('s-scope-date').value = toISODateLocal(new Date());
+  setSchedScope('from');
   document.getElementById('delete-btn').style.display = 'block';
   populateYearSelect();
   document.getElementById('s-startpreset').addEventListener('change', applyPresetToEnd);
   document.getElementById('s-startyear').addEventListener('change', applyPresetToEnd);
   // Restore start mode — default to 'date' if startDate set
   const startMode = s.startDate ? 'date' : 'today';
-  setStartPreset(startMode);
-  document.getElementById('s-startdate').value = s.startDate || new Date().toISOString().slice(0,10);
+  setStartPreset(converting ? 'date' : startMode);
+  if (converting) {
+    // la ricorrenza parte dal giorno dopo la prova (la prova resta lezione a sé)
+    const after = trial0 ? new Date(trial0.date + 'T00:00:00') : new Date();
+    if (trial0) after.setDate(after.getDate() + 1);
+    document.getElementById('s-startdate').value = toISODateLocal(after);
+  } else {
+    document.getElementById('s-startdate').value = s.startDate || new Date().toISOString().slice(0,10);
+  }
   setEndMode(s.endMode || 'never');
   document.getElementById('s-enddate').value = s.endDate || '';
   document.getElementById('s-endcount').value = s.endCount || '';
-  document.getElementById('whatsapp-student-btn').style.display = 'inline-flex';
+  document.getElementById('whatsapp-student-btn').style.display = converting ? 'none' : 'inline-flex';
   syncWhatsappStudentButtonState();
   goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
+
+let currentSchedScope = 'from';
+function setSchedScope(mode) {
+  currentSchedScope = mode;
+  document.getElementById('scope-from-btn').classList.toggle('active', mode === 'from');
+  document.getElementById('scope-always-btn').classList.toggle('active', mode === 'always');
+  document.getElementById('scope-from-field').style.display = mode === 'from' ? 'block' : 'none';
+  document.getElementById('scope-hint').textContent = mode === 'from'
+    ? 'Le lezioni prima di questa data restano com\'erano.'
+    : 'Attenzione: cambia anche le lezioni già passate (serve solo per correggere un errore).';
+}
+
 function saveStudent() {
   const name = document.getElementById('s-name').value.trim();
   if (!name) return;
@@ -2417,18 +2560,36 @@ function saveStudent() {
   const endCount = endMode === 'count' ? parseInt(document.getElementById('s-endcount').value) || null : null;
   const startDate = document.getElementById('s-startdate').value || null;
   const phone = document.getElementById('s-phone').value.trim();
-  const data = {
-    name, phone: phone || null,
+  const slotNew = {
     day: parseInt(document.getElementById('s-day').value),
     time: document.getElementById('s-time').value,
-    duration: parseInt(document.getElementById('s-duration').value),
-    startDate, endMode, endDate, endCount
+    duration: parseInt(document.getElementById('s-duration').value)
   };
+  const common = { name, phone: phone || null, startDate, endMode, endDate, endCount };
   if (editingId) {
     const idx = students.findIndex(x => x.id === editingId);
-    students[idx] = { ...students[idx], ...data };
+    const old = students[idx];
+    let upd = { ...old, ...common };
+    if (old.day == null) {
+      // lezione di prova → allievo fisso (la prova resta nel registro, gratuita)
+      Object.assign(upd, slotNew, { pendingTrial: false });
+    } else {
+      const cur = currentSlot(old);
+      const same = cur.day === slotNew.day && cur.time === slotNew.time && Number(cur.duration) === slotNew.duration;
+      if (!same) {
+        if (currentSchedScope === 'always') {
+          Object.assign(upd, slotNew, { changes: [] });
+        } else {
+          const from = document.getElementById('s-scope-date').value || toISODateLocal(new Date());
+          const changes = (old.changes || []).filter(c => c.from < from);
+          changes.push({ from, ...slotNew });
+          upd.changes = changes;
+        }
+      }
+    }
+    students[idx] = upd;
   } else {
-    students.push({ id: nextId++, ...data });
+    students.push({ id: nextId++, ...common, ...slotNew });
   }
   saveData(); closeModal(); renderCalendar();
 }
@@ -2750,6 +2911,8 @@ function openLesson(s, date, origKey, displayTime) {
   document.getElementById('activity-min').value = '';
   renderLessonActivities();
   renderDurationBox();
+  document.getElementById('trial-box').style.display = s._trial ? 'block' : 'none';
+  document.getElementById('trial-convert-btn').style.display = s.pendingTrial ? '' : 'none';
   document.getElementById('modal-lesson').classList.add('open');
 }
 
@@ -2961,7 +3124,7 @@ function renderDurationBox() {
 
   const durTxt = document.getElementById('lesson-duration-text');
   if (durTxt) durTxt.textContent = extra ? `${base + extra} min (${base} + ${extra} di recupero)` : `${base} min`;
-  document.getElementById('duration-box').style.display = eff === 'cancelled' ? 'none' : '';
+  document.getElementById('duration-box').style.display = (eff === 'cancelled' || st._trial) ? 'none' : '';
   document.getElementById('duration-total').textContent = extra ? `${base + extra} min` : '';
 
   // Riepilogo minuti da recuperare per questo allievo
@@ -3044,6 +3207,7 @@ function computeMonthlyFees(year, month) {
   getLessonsForCalendar(year, month).forEach(l => {
     const d = l.displayDate;
     if (d.getFullYear() !== year || d.getMonth() !== month) return;
+    if (l.student._trial) return;   // la lezione di prova è gratuita
     const raw = lessonStatus[l.origKey] || 'normal';
     if (raw === 'cancelled' || raw === 'makeup') return;
     add(l.student, Number(l.student.duration) || 0, d);
@@ -3123,11 +3287,46 @@ function renderFees() {
     .map(([sid, v]) => { const st = students.find(x => x.id === parseInt(sid)); return st ? `${escapeHtml(st.name.split(' ')[0])}: ${v.remaining} min` : ''; }).filter(Boolean);
   const extra = Object.entries(cov.byStudent).filter(([, v]) => v.given > v.owed)
     .map(([sid, v]) => { const st = students.find(x => x.id === parseInt(sid)); return st ? `${escapeHtml(st.name.split(' ')[0])}: ${v.given - v.owed} min` : ''; }).filter(Boolean);
-  let notes2 = 'Non contate: lezioni perse o annullate. Un recupero conta per intero nel giorno in cui si completa; i minuti aggiunti alle singole lezioni non si contano a parte.';
+  let notes2 = 'Non contate: lezioni di prova (gratuite), lezioni perse o annullate. Un recupero conta per intero nel giorno in cui si completa; i minuti aggiunti alle singole lezioni non si contano a parte.';
   if (open.length) notes2 += `<br>Recuperi ancora in corso (non contati): ${open.join(', ')}.`;
   if (extra.length) notes2 += `<br>Minuti aggiunti oltre quelli da recuperare (non contati): ${extra.join(', ')}.`;
   html += `<div class="fees-note">${notes2}</div>`;
   document.getElementById('fees-body').innerHTML = html;
+}
+
+// ---- Lezione di prova gratuita (allievo senza nome, poi trasformabile) ----
+function openTrialModal() {
+  document.getElementById('t-name').value = '';
+  document.getElementById('t-phone').value = '';
+  document.getElementById('t-date').value = toISODateLocal(new Date());
+  document.getElementById('t-time').value = '17:00';
+  document.getElementById('t-duration').value = '45';
+  document.getElementById('modal-trial').classList.add('open');
+}
+
+function saveTrial() {
+  const date = document.getElementById('t-date').value;
+  const time = document.getElementById('t-time').value;
+  if (!date || !time) return;
+  const duration = parseInt(document.getElementById('t-duration').value, 10) || 45;
+  const name = document.getElementById('t-name').value.trim();
+  const phone = document.getElementById('t-phone').value.trim();
+  students.push({
+    id: nextId++, name: name || 'Prova', phone: phone || null,
+    day: null, time: null, duration, startDate: null, endMode: 'never', endDate: null, endCount: null,
+    pendingTrial: true, oneOff: [{ date, time, duration, trial: true }]
+  });
+  // porta il calendario sul mese della prova
+  const d = new Date(date + 'T00:00:00');
+  currentDate = new Date(d.getFullYear(), d.getMonth(), 1);
+  saveData(); closeModal(); renderCalendar();
+}
+
+function convertCurrentTrial() {
+  if (!currentLessonStudent) return;
+  const id = currentLessonStudent.id;
+  closeModal();
+  editStudent(id);
 }
 
 // ---- Suggerimenti di orari liberi per lo spostamento/recupero di una lezione ----
@@ -3148,13 +3347,14 @@ function getBusyIntervalsForDate(dateObj, excludeKey) {
   const dateStr = dateObj.toDateString();
   const isoStr = toISODateLocal(dateObj);
   students.forEach(s => {
-    if (dateObj.getDay() !== s.day || !isLessonActive(s, dateObj)) return;
+    const sl = lessonSlotOn(s, dateObj);
+    if (!sl) return;
     const origKey = dateStr + '_' + s.id;
     if (origKey === excludeKey) return;
     if (deletedLessons.has(origKey) || movedLessons[origKey]) return;
     if (getStatus(origKey) === 'cancelled') return;
-    const start = timeToMinutes(s.time);
-    intervals.push({ start, end: start + lessonDuration(s, origKey), label: s.name.split(' ')[0] });
+    const start = timeToMinutes(sl.time);
+    intervals.push({ start, end: start + lessonDuration(studentAt(s, dateObj), origKey), label: s.name.split(' ')[0] });
   });
   Object.entries(movedLessons).forEach(([origKey, mv]) => {
     if (origKey === excludeKey || mv.date !== isoStr) return;
@@ -3163,7 +3363,7 @@ function getBusyIntervalsForDate(dateObj, excludeKey) {
     const s = students.find(x => x.id === sid);
     if (!s) return;
     const start = timeToMinutes(mv.time);
-    intervals.push({ start, end: start + lessonDuration(s, origKey), label: s.name.split(' ')[0] });
+    intervals.push({ start, end: start + lessonDuration(studentAt(s, new Date(origKey.split('_')[0])), origKey), label: s.name.split(' ')[0] });
   });
   return intervals.sort((a, b) => a.start - b.start);
 }

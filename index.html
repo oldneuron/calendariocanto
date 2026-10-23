@@ -650,6 +650,11 @@ if ('serviceWorker' in navigator) {
   .sched-scope-hint { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 5px; line-height: 1.4; }
   .student-time.sched-future { color: var(--accent-solid); }
 
+  /* Scheda "Non disponibile": nascosta finché non serve */
+  .unavail-hidden { display: none !important; }
+  .card-close-btn { float: right; background: none; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); color: var(--color-text-tertiary); font-size: 11px; font-family: var(--font-sans); font-weight: 500; padding: 3px 9px; cursor: pointer; }
+  .card-close-btn:hover { background: var(--color-background-secondary); }
+
   /* Desktop: usa tutta la larghezza dello schermo (smartphone invariato) */
   @media (min-width: 1024px) {
     body { padding: 1.5rem 2rem; }
@@ -669,6 +674,7 @@ if ('serviceWorker' in navigator) {
       <span class="unsaved-dot visible" id="unsaved-dot" title="Modifiche non ancora sincronizzate"></span>
       <button id="install-btn" onclick="installPWA()"><i class="ti ti-device-mobile"></i> Installa</button>
       <button onclick="openFees()"><i class="ti ti-currency-euro"></i> Compensi</button>
+      <button onclick="toggleUnavailCard()"><i class="ti ti-calendar-off"></i> Indisponibilità</button>
       <button onclick="document.getElementById('import-input').click()"><i class="ti ti-upload"></i> Importa</button>
       <button class="btn-export" onclick="exportFile()"><i class="ti ti-download"></i> Esporta</button>
     </div>
@@ -731,8 +737,8 @@ if ('serviceWorker' in navigator) {
         <div id="makeup-list"></div>
         <button class="link-btn" onclick="openHistory()">Vedi storico completo →</button>
       </div>
-      <div class="sidebar-card" data-panel="followups">
-        <h3><i class="ti ti-calendar-off"></i> Non disponibile</h3>
+      <div class="sidebar-card unavail-hidden" id="unavail-card" data-panel="followups">
+        <h3><i class="ti ti-calendar-off"></i> Non disponibile <button type="button" class="card-close-btn" onclick="toggleUnavailCard(false)">Nascondi</button></h3>
         <div id="unavail-list"></div>
         <button class="add-btn" onclick="openAddUnavailability()"><i class="ti ti-plus"></i> Aggiungi indisponibilità</button>
         <button class="add-btn" onclick="openHolidaysModal()" style="margin-top:6px;"><i class="ti ti-calendar-event"></i> Festività italiane</button>
@@ -2027,6 +2033,19 @@ function lessonStatusCategory(status, isMoved) {
   if (status === 'makeup') return 'pending';
   if (isMoved) return 'moved'; // include lo stato 'recovered', sempre associato a una lezione spostata
   return 'confirmed';
+}
+
+// La scheda "Non disponibile" resta nascosta; il pulsante "Indisponibilità" la mostra
+// (e porta lì), quando serve aggiungere o modificare giorni di indisponibilità.
+function toggleUnavailCard(show) {
+  const card = document.getElementById('unavail-card');
+  const visible = !card.classList.contains('unavail-hidden');
+  const want = show === undefined ? !visible : show;
+  card.classList.toggle('unavail-hidden', !want);
+  if (want) {
+    setMobilePanel('followups');
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function setMobilePanel(name) {

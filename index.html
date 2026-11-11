@@ -648,6 +648,14 @@ if ('serviceWorker' in navigator) {
   .fees-adjust .fees-stepper button { width: 34px; height: 34px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .fees-adjust .fees-stepper button:hover { background: var(--color-background-secondary); }
   .fees-adjust .fees-stepper output { min-width: 28px; text-align: center; font-weight: 700; font-size: 15px; }
+  .quarter-box { margin: 4px 0 14px; padding: 10px 12px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-secondary); font-size: 13px; }
+  .quarter-box .q-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); }
+  .quarter-box .q-title { font-weight: 600; margin: 2px 0 8px; }
+  .quarter-box .q-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+  .quarter-box .q-cell { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 6px 2px; min-width: 0; }
+  .quarter-box .q-num { font-size: 20px; font-weight: 700; line-height: 1.1; }
+  .quarter-box .q-lbl { font-size: 11px; color: var(--color-text-secondary); line-height: 1.2; margin-top: 2px; }
+  .quarter-box .q-note { font-size: 11.5px; color: var(--color-text-tertiary); line-height: 1.45; margin-top: 8px; }
   .fees-item { font-size: 12px; color: var(--color-text-secondary); padding: 2px 0; line-height: 1.4; }
 
   /* ===== Lezione di prova / cambio orario ===== */
@@ -776,6 +784,7 @@ if ('serviceWorker' in navigator) {
       <div class="field"><label>Nome</label><input type="text" id="s-name" placeholder="es. Maria Rossi"></div>
       <div class="field"><label>Telefono</label><input type="tel" id="s-phone" placeholder="es. 333 1234567" oninput="syncWhatsappStudentButtonState()"></div>
       <button type="button" class="btn-whatsapp" id="whatsapp-student-btn" style="display:none" onclick="sendWhatsappForCurrentStudent()"><i class="ti ti-brand-whatsapp"></i> Invia promemoria WhatsApp</button>
+      <div class="quarter-box" id="quarter-box" style="display:none"></div>
       <div class="field"><label>Durata lezione (minuti)</label>
         <select id="s-duration">
           <option value="30">30 min</option><option value="45">45 min</option><option value="60" selected="">60 min</option><option value="90">90 min</option>
@@ -1832,6 +1841,96 @@ function occurrenceOutcome(origKey) {
   return 'delivered';
 }
 
+// ---- Trimestre in corso (ottobre-dicembre, gennaio-marzo, aprile-giugno) ----
+// Da luglio a settembre non c'è un trimestre attivo: si mostra il prossimo (ottobre-dicembre).
+function quarterForDate(date) {
+  const y = date.getFullYear(), m = date.getMonth();
+  if (m >= 9) return { start: new Date(y, 9, 1), end: new Date(y, 11, 31), label: 'Ottobre–Dicembre ' + y, upcoming: false };
+  if (m <= 2) return { start: new Date(y, 0, 1), end: new Date(y, 2, 31), label: 'Gennaio–Marzo ' + y, upcoming: false };
+  if (m <= 5) return { start: new Date(y, 3, 1), end: new Date(y, 5, 30), label: 'Aprile–Giugno ' + y, upcoming: false };
+  return { start: new Date(y, 9, 1), end: new Date(y, 11, 31), label: 'Ottobre–Dicembre ' + y, upcoming: true };
+}
+
+// Indisponibilità (giorno intero o fascia oraria) che coprono una lezione.
+function lessonBlockedByUnavailability(date, time, duration) {
+  const list = getUnavailabilityForDate(date);
+  if (!list.length) return null;
+  const start = timeToMinutes(time), end = start + (Number(duration) || 0);
+  return list.find(u => u.allDay || !u.startTime || !u.endTime ||
+    (start < timeToMinutes(u.endTime) && end > timeToMinutes(u.startTime))) || null;
+}
+
+// Lezioni di un allievo nel trimestre: totale, effettuate, da fare, da recuperare.
+// Le lezioni regolari che cadono in un'indisponibilità non si svolgono e non si contano
+// (a meno che siano state spostate a mano); le annullate non si contano; le perse
+// (da recuperare) restano nel totale del trimestre in cui erano previste.
+function computeQuarterLessons(s, q) {
+  q = q || quarterForDate(new Date());
+  const todayNum = dayNum(new Date());
+  const res = { quarter: q, totale: 0, effettuate: 0, daFare: 0, daRecuperare: 0, escluse: [], annullate: [] };
+  if (s.day == null && !(s.oneOff || []).length) return res;
+  const cur = new Date(q.start);
+  while (cur <= q.end) {
+    const d = new Date(cur);
+    cur.setDate(cur.getDate() + 1);
+    const slot = lessonSlotOn(s, d);
+    if (!slot || slot.trial) continue;
+    const key = d.toDateString() + '_' + s.id;
+    if (deletedLessons.has(key)) continue;
+    const st = getStatus(key);
+    const mv = movedLessons[key];
+    if (st === 'cancelled') { res.annullate.push({ date: d }); continue; }
+    if (st === 'normal' && !mv) {
+      const blk = lessonBlockedByUnavailability(d, slot.time, slot.duration);
+      if (blk) { res.escluse.push({ date: d, label: blk.label || '' }); continue; }
+    }
+    res.totale++;
+    if (st === 'makeup') { res.daRecuperare++; continue; }
+    const eff = mv ? new Date(mv.date + 'T00:00:00') : d;
+    if (dayNum(eff) <= todayNum) res.effettuate++; else res.daFare++;
+  }
+  return res;
+}
+
+function quarterBadge(s) {
+  if (s.day == null) return '';
+  const r = computeQuarterLessons(s);
+  if (!r.totale) return '';
+  const tip = `Trimestre ${r.quarter.label}: ${r.effettuate} effettuate su ${r.totale}, ${r.daFare} da fare` + (r.daRecuperare ? `, ${r.daRecuperare} da recuperare` : '');
+  const resta = r.daFare + r.daRecuperare;
+  return `<span class="end-badge" title="${tip}">Trimestre: ${r.effettuate}/${r.totale} · ${resta ? resta + ' da fare' : 'completo'}</span>`;
+}
+
+function renderQuarterBox(s) {
+  const box = document.getElementById('quarter-box');
+  if (!s || s.day == null) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const r = computeQuarterLessons(s);
+  // date raggruppate per motivo: "22 dic, 29 dic (Natale)"
+  const fmtList = arr => {
+    const groups = [];
+    arr.forEach(x => {
+      const lbl = x.label || '';
+      let g = groups.find(y => y.lbl === lbl);
+      if (!g) { g = { lbl, dates: [] }; groups.push(g); }
+      g.dates.push(fmtDateShort(x.date));
+    });
+    return groups.map(g => g.dates.join(', ') + (g.lbl ? ' (' + escapeHtml(g.lbl) + ')' : '')).join('; ');
+  };
+  let note = '';
+  if (r.escluse.length) note += `Non si svolgono per indisponibilità (non contate): ${fmtList(r.escluse)}.<br>`;
+  if (r.annullate.length) note += `Annullate (non contate): ${fmtList(r.annullate)}.<br>`;
+  if (r.daRecuperare) note += `Le lezioni da recuperare restano nel totale del trimestre.`;
+  box.innerHTML = `<div class="q-head">${r.quarter.upcoming ? 'Prossimo trimestre' : 'Trimestre in corso'}</div>
+    <div class="q-title">${r.quarter.label}</div>
+    <div class="q-grid">
+      <div class="q-cell"><div class="q-num">${r.totale}</div><div class="q-lbl">Totale</div></div>
+      <div class="q-cell"><div class="q-num">${r.effettuate}</div><div class="q-lbl">Effettuate</div></div>
+      <div class="q-cell"><div class="q-num">${r.daFare}</div><div class="q-lbl">Da fare</div></div>
+      <div class="q-cell"><div class="q-num">${r.daRecuperare}</div><div class="q-lbl">Da recup.</div></div>
+    </div>${note ? `<div class="q-note">${note}</div>` : ''}`;
+  box.style.display = 'block';
+}
+
 // Conteggio lezioni previste / erogate / in sospeso per un allievo, calcolato
 // fino ad oggi. "In sospeso" usa la stessa fonte dati della scheda
 // "Da recuperare", così i due conteggi restano sempre coerenti tra loro.
@@ -2100,6 +2199,7 @@ function renderStudents() {
         <div class="student-time">${studentTimeLine(s)}</div>
         ${studentFutureChange(s)}
         <div class="student-time" style="margin-top:2px;">${lessonCountBadge(s)}</div>
+        ${quarterBadge(s) ? `<div class="student-time" style="margin-top:2px;">${quarterBadge(s)}</div>` : ''}
         ${s.day == null ? `<button type="button" class="trial-convert-btn" onclick="event.stopPropagation(); editStudent(${s.id})"><i class="ti ti-user-plus"></i> Trasforma in allievo fisso</button>` : ''}
         ${s.phone ? `<div class="student-time"><i class="ti ti-phone" style="font-size:10px;"></i> ${s.phone}</div>` : ''}
       </div>
@@ -2525,6 +2625,7 @@ function openAddStudent() {
   document.getElementById('s-enddate').value = '';
   document.getElementById('s-endcount').value = '';
   document.getElementById('whatsapp-student-btn').style.display = 'none';
+  renderQuarterBox(null);
   goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
@@ -2572,6 +2673,7 @@ function editStudent(id) {
   document.getElementById('s-endcount').value = s.endCount || '';
   document.getElementById('whatsapp-student-btn').style.display = converting ? 'none' : 'inline-flex';
   syncWhatsappStudentButtonState();
+  renderQuarterBox(converting ? null : s);
   goToWizardStep(1);
   document.getElementById('modal-student').classList.add('open');
 }
